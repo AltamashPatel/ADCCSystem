@@ -269,10 +269,17 @@ class DisasterState(TypedDict, total=False):
     │ allocation_plan         │ allocation_agent                 │
     │ shelter_plan            │ shelter_agent                    │
     │ evacuation_plan         │ replanning_agent                 │
+    │ route_plan              │ route_planning_agent             │
     │ recommendations         │ command_center / replanning      │
     │ explanation             │ command_center                   │
     │ simulation_results      │ simulation_engine                │
     │ metadata                │ all nodes (append-only)          │
+    │ supervisor_decision     │ supervisor_agent                 │
+    │ supervisor_iterations   │ supervisor_agent                 │
+    │ next_agents             │ supervisor_agent                 │
+    │ agents_completed        │ supervisor_agent                 │
+    │ notification_sent       │ notification_agent               │
+    │ new_events_detected     │ supervisor_agent / replanning    │
     └─────────────────────────┴──────────────────────────────────┘
     """
 
@@ -282,6 +289,11 @@ class DisasterState(TypedDict, total=False):
 
     timestamp: str
     """ISO 8601 UTC timestamp of when this session was initialized."""
+
+    latitude: Optional[float]
+    longitude: Optional[float]
+    location_label: Optional[str]
+    country: Optional[str]
 
     # ── Raw Data (from tools/) ───────────────────────────────────────────────
     weather_data: Optional[WeatherStateData]
@@ -384,6 +396,50 @@ class DisasterState(TypedDict, total=False):
     True if executing in Demo Mode.
     """
 
+    # ── Route Plan ───────────────────────────────────────────────────────────
+    route_plan: Optional[dict]
+    """
+    Evacuation route plan from route_planning_agent.py.
+    Contains primary route + alternatives per zone.
+    """
+
+    # ── Supervisor Control Fields ─────────────────────────────────────────────
+    supervisor_decision: Optional[dict]
+    """
+    The last SupervisorDecision emitted by supervisor_agent.py.
+    Shape: {next_agents, reasoning, needs_more_data, confidence_threshold_met, is_done}
+    """
+
+    supervisor_iterations: int
+    """
+    Safety loop counter — how many times the supervisor has been invoked.
+    Max 10 iterations; forced END if exceeded.
+    """
+
+    next_agents: list[str]
+    """
+    Agents queued to run next, as chosen by the supervisor.
+    Supports multiple entries for parallel fan-out (e.g. ['allocation', 'shelter']).
+    """
+
+    agents_completed: list[str]
+    """
+    Tracks which agents have successfully completed in this session.
+    Appended to by each agent's node wrapper.
+    """
+
+    notification_sent: bool
+    """
+    True once the notification_agent has dispatched alerts.
+    Gates against duplicate notifications.
+    """
+
+    new_events_detected: bool
+    """
+    True when new incoming disaster events are detected mid-cycle.
+    Triggers dynamic replanning by the supervisor.
+    """
+
     # ── Simulation ────────────────────────────────────────────────────────────
     simulation_results: list[SimulationResultState]
     """
@@ -436,6 +492,10 @@ def create_initial_state(
         # Session identity
         "session_id":  sid,
         "timestamp":   now_iso,
+        "latitude":    None,
+        "longitude":   None,
+        "location_label": None,
+        "country":     None,
 
         # Raw data (empty — populated by data_collection_agent)
         "weather_data":       None,
@@ -454,12 +514,21 @@ def create_initial_state(
         "allocation_plan":  None,
         "shelter_plan":     None,
         "evacuation_plan":  None,
+        "route_plan":       None,
 
         # Output (populated by command_center)
         "recommendations": [],
         "explanation":     "",
         "replanning_actions": [],
         "is_demo":          False,
+
+        # Supervisor control (populated by supervisor_agent)
+        "supervisor_decision":    None,
+        "supervisor_iterations":  0,
+        "next_agents":            [],
+        "agents_completed":       [],
+        "notification_sent":      False,
+        "new_events_detected":    False,
 
         # Simulation
         "simulation_results": [],

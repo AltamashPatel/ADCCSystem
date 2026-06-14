@@ -1027,6 +1027,8 @@ class WorkflowRunPayload(BaseModel):
     longitude: float = Field(..., ge=-180, le=180)
     location_label: Optional[str] = "Disaster Zone"
     country: Optional[str] = "India"
+    disaster_title: Optional[str] = None
+    disaster_type: Optional[str] = None
 
 
 @app.post("/api/orchestration/run", tags=["Orchestration"])
@@ -1047,6 +1049,60 @@ def run_orchestration_workflow(payload: WorkflowRunPayload, db: Session = Depend
             "location_label": payload.location_label,
             "country": payload.country
         }
+        
+        # Handle custom real-time disaster injection
+        if payload.disaster_title and payload.disaster_type:
+            logger.info(f"💉 Injecting simulated real-time disaster event for scraping: {payload.disaster_title} ({payload.disaster_type})")
+            
+            from datetime import timezone
+            
+            # Map type to GDACS code
+            event_type_map = {"Flood": "FL", "Cyclone": "TC", "Earthquake": "EQ", "Wildfire": "WF", "Heatwave": "HW"}
+            g_code = event_type_map.get(payload.disaster_type, "FL")
+            
+            if payload.disaster_type == "Earthquake":
+                injected_eq = {
+                    "usgs_id": f"injected-eq-{uuid.uuid4().hex[:8]}",
+                    "usgs_url": "https://earthquake.usgs.gov",
+                    "magnitude": 6.5, # Default moderate-strong magnitude for verification
+                    "magnitude_type": "Mw",
+                    "depth_km": 10.0,
+                    "depth_label": "Shallow",
+                    "latitude": payload.latitude,
+                    "longitude": payload.longitude,
+                    "place": payload.location_label,
+                    "country": payload.country or "India",
+                    "severity_mapped": "High",
+                    "event_time": datetime.now(timezone.utc).isoformat(),
+                    "event_time_ist": datetime.now(timezone.utc).isoformat(),
+                    "felt_reports": 120,
+                    "tsunami_risk": False,
+                    "alert_level": "Orange",
+                    "significance": 650,
+                    "source": "LIVE", # LIVE source triggers real news search in verification agent!
+                    "source_url": "https://earthquake.usgs.gov"
+                }
+                initial_state["earthquake_events"] = [injected_eq]
+            else:
+                injected_event = {
+                    "event_id": f"injected-{uuid.uuid4().hex[:8]}",
+                    "event_type": g_code,
+                    "event_type_label": payload.disaster_type,
+                    "alert_level": "Red",
+                    "severity_mapped": "High",
+                    "alert_score": 3.5,
+                    "country": payload.country or "India",
+                    "latitude": payload.latitude,
+                    "longitude": payload.longitude,
+                    "title": payload.disaster_title,
+                    "description": f"Real-time ingestion for {payload.disaster_title}",
+                    "url": "https://www.gdacs.org",
+                    "affected_population": 12000,
+                    "event_date": datetime.now(timezone.utc).isoformat(),
+                    "source": "LIVE", # LIVE source triggers real news search in verification agent!
+                    "source_url": "https://www.gdacs.org"
+                }
+                initial_state["disaster_events"] = [injected_event]
         
         # Run graph
         result = run_graph(initial_state)

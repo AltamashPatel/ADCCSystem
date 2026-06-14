@@ -256,6 +256,8 @@ export const apiService = {
     longitude: number;
     location_label: string;
     country: string;
+    disaster_title?: string;
+    disaster_type?: string;
   }): Promise<OrchestrationResult> => {
     const { data } = await api.post<OrchestrationResult>('/api/orchestration/run', payload);
     return data;

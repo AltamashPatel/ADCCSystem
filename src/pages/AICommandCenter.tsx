@@ -30,10 +30,10 @@ export const AICommandCenter: React.FC = () => {
   
   // Grid Presets
   const gridPresets = [
-    { label: 'Guwahati Brahmaputra Inundation', lat: 26.1445, lng: 91.7362, country: 'India' },
-    { label: 'Mumbai Coastal Storm Surge', lat: 19.0760, lng: 72.8777, country: 'India' },
-    { label: 'Pune Fault Line Aftershock', lat: 18.5204, lng: 73.8567, country: 'India' },
-    { label: 'Nagpur Subsector Heatwave', lat: 21.1458, lng: 79.0882, country: 'India' }
+    { label: 'Guwahati Brahmaputra Inundation', lat: 26.1445, lng: 91.7362, country: 'India', defaultTitle: 'Guwahati Brahmaputra Flood', defaultType: 'Flood' },
+    { label: 'Mumbai Coastal Storm Surge', lat: 19.0760, lng: 72.8777, country: 'India', defaultTitle: 'Mumbai Storm Inundation', defaultType: 'Cyclone' },
+    { label: 'Pune Fault Line Aftershock', lat: 18.5204, lng: 73.8567, country: 'India', defaultTitle: 'Pune Seismic Displacement', defaultType: 'Earthquake' },
+    { label: 'Nagpur Subsector Heatwave', lat: 21.1458, lng: 79.0882, country: 'India', defaultTitle: 'Nagpur Heatwave anomaly', defaultType: 'Heatwave' }
   ];
 
   // Selected Target state
@@ -41,6 +41,8 @@ export const AICommandCenter: React.FC = () => {
   const [customLat, setCustomLat] = useState<string>('');
   const [customLng, setCustomLng] = useState<string>('');
   const [customLabel, setCustomLabel] = useState<string>('');
+  const [customTitle, setCustomTitle] = useState<string>(gridPresets[0].defaultTitle);
+  const [customType, setCustomType] = useState<string>(gridPresets[0].defaultType);
   
   const [showJsonTerminal, setShowJsonTerminal] = useState<boolean>(false);
   const [orchestratorResult, setOrchestratorResult] = useState<OrchestrationResult | null>(null);
@@ -125,7 +127,14 @@ export const AICommandCenter: React.FC = () => {
 
   // Mutation to trigger LangGraph workflow
   const orchestrateMutation = useMutation({
-    mutationFn: async (payload: { latitude: number; longitude: number; location_label: string; country: string }) => {
+    mutationFn: async (payload: { 
+      latitude: number; 
+      longitude: number; 
+      location_label: string; 
+      country: string;
+      disaster_title?: string;
+      disaster_type?: string;
+    }) => {
       return apiService.runOrchestration(payload);
     },
     onSuccess: (data) => {
@@ -154,7 +163,9 @@ export const AICommandCenter: React.FC = () => {
       latitude: lat,
       longitude: lng,
       location_label: label,
-      country: selectedGrid.country
+      country: selectedGrid.country,
+      disaster_title: customTitle || undefined,
+      disaster_type: customType || undefined
     });
   };
 
@@ -167,6 +178,12 @@ export const AICommandCenter: React.FC = () => {
   const allocPlan = state?.allocation_plan || null;
   const shelterPlan = state?.shelter_plan || null;
   const replanningActions = orchestratorResult?.replanning_actions || [];
+  
+  // New Supervisor & Evacuation/Alert fields
+  const routePlan = state?.route_plan || null;
+  const notificationSent = state?.notification_sent || false;
+  const supervisorIterations = state?.supervisor_iterations || 0;
+  const supervisorDecision = state?.supervisor_decision || null;
 
   return (
     <PageContainer>
@@ -201,6 +218,8 @@ export const AICommandCenter: React.FC = () => {
                       setCustomLat('');
                       setCustomLng('');
                       setCustomLabel('');
+                      setCustomTitle(grid.defaultTitle);
+                      setCustomType(grid.defaultType);
                     }}
                     className={`p-2.5 text-left border rounded text-[11px] transition-all duration-150 ${
                       selectedGrid.label === grid.label && !customLat
@@ -256,6 +275,35 @@ export const AICommandCenter: React.FC = () => {
                   placeholder="e.g. Metro Sector A"
                   className="bg-adcc-bg border border-gray-850 text-adcc-textPrimary rounded p-2 outline-none focus:border-adcc-accent text-[11px] font-sans"
                 />
+              </div>
+
+              <div className="flex flex-col gap-1 text-[10px]">
+                <span>CUSTOM DISASTER TITLE (FOR REAL-TIME SCRAPING)</span>
+                <input
+                  type="text"
+                  disabled={isExecuting}
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="e.g. Guwahati Flood 2026"
+                  className="bg-adcc-bg border border-gray-850 text-adcc-textPrimary rounded p-2 outline-none focus:border-adcc-accent text-[11px] font-sans"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1 text-[10px]">
+                <span>DISASTER TYPE</span>
+                <select
+                  disabled={isExecuting}
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value)}
+                  className="bg-[#0B1220] border border-gray-850 text-adcc-textPrimary rounded p-2 outline-none focus:border-adcc-accent text-[11px]"
+                >
+                  <option value="">-- Select Type --</option>
+                  <option value="Flood">Flood</option>
+                  <option value="Cyclone">Cyclone</option>
+                  <option value="Earthquake">Earthquake</option>
+                  <option value="Wildfire">Wildfire</option>
+                  <option value="Heatwave">Heatwave</option>
+                </select>
               </div>
             </div>
 
@@ -349,6 +397,57 @@ export const AICommandCenter: React.FC = () => {
                   </div>
                 </div>
 
+                {/* SUPERVISOR COMMAND BRAIN WIDGET */}
+                <div className="glass-panel border border-adcc-accent/30 rounded-xl p-5 bg-[#090E1A]/85 flex flex-col gap-4 shadow-glow">
+                  <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                    <h3 className="font-bold text-xs font-mono uppercase tracking-wider text-adcc-accent flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-adcc-accent animate-pulse" />
+                      ADCC Supervisor Agent Command Brain
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-bold text-adcc-bg bg-adcc-accent border border-adcc-accent uppercase">
+                      Active Orchestrator v2.0
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+                    {/* Iteration Counter */}
+                    <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-0.5 justify-center items-center text-center">
+                      <span className="text-[9px] text-adcc-textMuted uppercase">Cognitive Cycles Run</span>
+                      <span className="text-lg font-bold text-adcc-accent">{supervisorIterations} / 10</span>
+                      <span className="text-[8px] text-gray-500 uppercase mt-0.5">Observe-Think-Decide-Act loops</span>
+                    </div>
+
+                    {/* Execution Strategy */}
+                    <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-0.5 justify-center items-center text-center">
+                      <span className="text-[9px] text-adcc-textMuted uppercase">Execution Routing</span>
+                      <span className="text-sm font-bold text-adcc-success uppercase mt-1">Autonomous / Agentic</span>
+                      <span className="text-[8px] text-adcc-success/80 mt-0.5 font-bold uppercase">LangGraph Conditional Router</span>
+                    </div>
+
+                    {/* Completion Status */}
+                    <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-0.5 justify-center items-center text-center">
+                      <span className="text-[9px] text-adcc-textMuted uppercase">Final Goal Status</span>
+                      <span className={`text-sm font-bold uppercase mt-1 ${
+                        state?.supervisor_decision?.is_done ? "text-adcc-success" : "text-adcc-warning"
+                      }`}>{state?.supervisor_decision?.is_done ? "GOAL ACHIEVED" : "IN PROGRESS"}</span>
+                      <span className="text-[8px] text-gray-500 uppercase mt-0.5">Confidence Gate Met: {state?.supervisor_decision?.confidence_threshold_met ? "YES" : "NO"}</span>
+                    </div>
+                  </div>
+
+                  {/* Supervisor reasoning box */}
+                  {supervisorDecision && (
+                    <div className="bg-[#050811] border border-gray-850 rounded-lg p-3.5 flex flex-col gap-2">
+                      <div className="text-[9px] font-bold text-adcc-textMuted uppercase tracking-wider flex items-center gap-1">
+                        <Terminal size={11} className="text-adcc-accent" />
+                        Supervisor Reasoning & Chain-of-Thought
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-adcc-textPrimary font-sans italic pl-1 border-l border-adcc-accent/30 mt-1">
+                        "{supervisorDecision.reasoning}"
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* SECTION 1: Verified Incidents */}
                 <div className="glass-panel border border-gray-800 rounded-xl p-5 bg-[#090E1A]/60 flex flex-col gap-4">
                   <div className="flex items-center justify-between border-b border-gray-850 pb-2">
@@ -427,6 +526,162 @@ export const AICommandCenter: React.FC = () => {
 
                 {/* SECTION 5: Replanning Actions */}
                 <ReplanningActivityView actions={replanningActions} />
+
+                {/* SECTION 6: Evacuation Route Planning */}
+                {routePlan && (
+                  <div className="glass-panel border border-gray-800 rounded-xl p-5 bg-[#090E1A]/60 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                      <h3 className="font-bold text-xs font-mono uppercase tracking-wider text-adcc-textPrimary flex items-center gap-1.5">
+                        <MapPin size={14} className="text-adcc-accent" />
+                        Section 6: Evacuation Route Planning Plan
+                      </h3>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold text-adcc-success border border-adcc-success/35 bg-adcc-success/5 uppercase">
+                        Active Route
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 font-mono text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Route Details Card */}
+                        <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-2">
+                          <div className="text-[10px] text-adcc-textMuted uppercase font-semibold">Primary Route Details</div>
+                          <div className="flex justify-between text-[11px] mt-1">
+                            <span className="text-adcc-textMuted">From:</span>
+                            <span className="text-adcc-textPrimary font-semibold">{routePlan.primary_route.from}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">To:</span>
+                            <span className="text-adcc-textPrimary font-semibold">{routePlan.primary_route.to}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">Transport Profile:</span>
+                            <span className="text-adcc-accent uppercase font-bold">{routePlan.primary_route.profile}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">Calculation Engine:</span>
+                            <span className="text-adcc-textPrimary font-semibold">{routePlan.primary_route.provider}</span>
+                          </div>
+                        </div>
+
+                        {/* Route Metrics Card */}
+                        <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-2">
+                          <div className="text-[10px] text-adcc-textMuted uppercase font-semibold">Route Metrics</div>
+                          <div className="flex justify-between text-[11px] mt-1">
+                            <span className="text-adcc-textMuted">Distance:</span>
+                            <span className="text-adcc-textPrimary font-bold">{routePlan.primary_route.distance_km?.toFixed(2)} km</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">Duration:</span>
+                            <span className="text-adcc-textPrimary font-bold">{routePlan.primary_route.duration_minutes?.toFixed(0)} minutes</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">Est. Evacuation Time:</span>
+                            <span className="text-adcc-warning font-bold">{routePlan.estimated_time_hours} hours</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">Total Evacuees:</span>
+                            <span className="text-adcc-textPrimary font-bold">{routePlan.total_people_to_evacuate} people</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Evacuation Zones */}
+                      <div className="bg-adcc-secondary/25 border border-gray-850/80 p-3 rounded-lg flex flex-col gap-1.5">
+                        <div className="text-[9px] text-adcc-textMuted uppercase">Priority Evacuation Sectors</div>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {routePlan.evacuation_zones?.map((zone: string, i: number) => (
+                            <span key={i} className="px-2 py-0.5 border border-adcc-accent/20 bg-adcc-accent/5 text-adcc-accent text-[9.5px] rounded">
+                              Priority {i+1}: {zone}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Alternative Routes */}
+                      {routePlan.primary_route.alternatives?.length > 0 && (
+                        <div className="border border-gray-850/60 p-3 rounded-lg flex flex-col gap-1">
+                          <div className="text-[9px] text-adcc-textMuted uppercase mb-1">Alternative Evacuation Channels</div>
+                          {routePlan.primary_route.alternatives.map((alt: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-[10px] py-1 border-b border-gray-900 last:border-b-0">
+                              <span className="text-adcc-textMuted">Resilience Pathway #{idx + 1}</span>
+                              <span className="text-adcc-textPrimary">{alt.distance_km?.toFixed(1)} km (~{alt.duration_minutes?.toFixed(0)} min duration)</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* SECTION 7: Emergency Dispatch Notifications */}
+                {notificationSent && (
+                  <div className="glass-panel border border-gray-800 rounded-xl p-5 bg-[#090E1A]/60 flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                      <h3 className="font-bold text-xs font-mono uppercase tracking-wider text-adcc-textPrimary flex items-center gap-1.5">
+                        <Radio size={14} className="text-adcc-success" />
+                        Section 7: Emergency Alert Notifications
+                      </h3>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold text-adcc-success border border-adcc-success/35 bg-adcc-success/5 uppercase animate-pulse">
+                        SMS & WhatsApp Live
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 font-mono text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Dispatch Logs */}
+                        <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-2">
+                          <div className="text-[10px] text-adcc-textMuted uppercase font-semibold">Live Transmission Stream</div>
+                          <div className="flex items-center gap-2 text-[11px] mt-1">
+                            <span className="h-1.5 w-1.5 bg-adcc-success rounded-full animate-ping" />
+                            <span className="text-adcc-textMuted">Twilio SMS Gateway:</span>
+                            <span className="text-adcc-success font-bold">SENT (100% Delivery)</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="h-1.5 w-1.5 bg-adcc-success rounded-full animate-ping" />
+                            <span className="text-adcc-textMuted">WhatsApp Broadcast:</span>
+                            <span className="text-adcc-success font-bold">DELIVERED</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="h-1.5 w-1.5 bg-gray-500 rounded-full" />
+                            <span className="text-adcc-textMuted">Broadcast Target:</span>
+                            <span className="text-adcc-textPrimary font-semibold">Local Population & Emergency Services</span>
+                          </div>
+                        </div>
+
+                        {/* Dispatch Parameters */}
+                        <div className="bg-adcc-secondary/20 border border-gray-850 p-3.5 rounded-lg flex flex-col gap-2">
+                          <div className="text-[10px] text-adcc-textMuted uppercase font-semibold">Transmission Settings</div>
+                          <div className="flex justify-between text-[11px] mt-1">
+                            <span className="text-adcc-textMuted">Broadcast Area:</span>
+                            <span className="text-adcc-textPrimary">{state?.location_label || "Disaster Zone"}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">SMS Recipients:</span>
+                            <span className="text-adcc-textPrimary font-semibold">+91-XXXXX-XXXXX (ADCC Hub)</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-adcc-textMuted">Trigger Code:</span>
+                            <span className="text-adcc-accent font-bold">AUTO_DISPATCH_ALERT_{severityLevel.toUpperCase()}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Styled Alert Message Template sent */}
+                      <div className="bg-[#050811] border border-gray-850 rounded-lg p-4 flex flex-col gap-2 relative">
+                        <div className="text-[9px] font-bold text-adcc-accent uppercase tracking-wider">SMS / WhatsApp Message Broadcast Preview</div>
+                        <div className="text-[10.5px] leading-relaxed text-adcc-textPrimary font-mono whitespace-pre-wrap mt-1 bg-black/45 p-3 rounded border border-gray-900 shadow-inner max-w-full">
+                          {severityLevel === 'Critical' ? (
+                            `🚨 CRITICAL DISASTER ALERT — ADCC\nDisaster: ${state?.verified_reports?.[0]?.disaster_title || "Disaster Alert"}\nSeverity: CRITICAL | Confidence: ${confidence}%\nAffected Area: ${state?.location_label || "Selected Coordinates"}\nResources Deployed: Active | Shelters: Active\nEvacuation: MANDATORY — Follow designated routes.\nNDRF & Emergency Services are responding.`
+                          ) : severityLevel === 'High' ? (
+                            `⚠️ HIGH SEVERITY ALERT — ADCC\nDisaster: ${state?.verified_reports?.[0]?.disaster_title || "Disaster Alert"}\nSeverity: HIGH | Confidence: ${confidence}%\nAffected Area: ${state?.location_label || "Selected Coordinates"}\nResources Deployed: Active | Shelters: Available\nPlease follow evacuation advisories.`
+                          ) : (
+                            `ℹ️ DISASTER WARNING — ADCC\nSituation: ${state?.verified_reports?.[0]?.disaster_title || "Disaster Alert"}\nSeverity: ${severityLevel} | Confidence: ${confidence}%\nArea: ${state?.location_label || "Selected Coordinates"}\nMonitoring situation closely. Stay alert.`
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* COLLAPSIBLE RAW JSON TERMINAL */}
                 <div className="glass-panel border border-gray-800 rounded-xl overflow-hidden bg-[#050811] flex flex-col">

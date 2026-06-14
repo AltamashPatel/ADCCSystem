@@ -341,17 +341,22 @@ def collect_disaster_data(
         events = [_normalize_gdacs_event(e) for e in gdacs_result.events]
         elapsed = round(time.monotonic() - t_start, 2)
 
+        # Preserve pre-existing live/demo events
+        existing_events = state.get("disaster_events") or []
+        injected_events = [e for e in existing_events if e.get("source") in ("LIVE", "DEMO")]
+        combined_events = injected_events + events
+
         # Count by alert level for logging
-        red    = sum(1 for e in events if e.get("alert_level") == "Red")
-        orange = sum(1 for e in events if e.get("alert_level") == "Orange")
+        red    = sum(1 for e in combined_events if e.get("alert_level") == "Red")
+        orange = sum(1 for e in combined_events if e.get("alert_level") == "Orange")
 
         logger.success(
             f"[DataAgent] ✅ GDACS data collected in {elapsed}s | "
-            f"Total={len(events)} | Red={red} | Orange={orange}"
+            f"Total={len(combined_events)} | Red={red} | Orange={orange}"
         )
 
         state = update_state_metadata(state, current_node=AGENT_NAME, data_source="GDACS")
-        return {**state, "disaster_events": events}  # type: ignore[return-value]
+        return {**state, "disaster_events": combined_events}  # type: ignore[return-value]
 
     except Exception as e:
         elapsed = round(time.monotonic() - t_start, 2)
@@ -437,17 +442,22 @@ def collect_earthquake_data(
         events = [_normalize_earthquake(eq) for eq in result.events]
         elapsed = round(time.monotonic() - t_start, 2)
 
+        # Preserve pre-existing live/demo events
+        existing_eqs = state.get("earthquake_events") or []
+        injected_eqs = [e for e in existing_eqs if e.get("source") in ("LIVE", "DEMO")]
+        combined_eqs = injected_eqs + events
+
         # Count significant events
-        significant = sum(1 for e in events if e.get("magnitude", 0) >= 5.5)
-        tsunami_risk = sum(1 for e in events if e.get("tsunami_risk", False))
+        significant = sum(1 for e in combined_eqs if e.get("magnitude", 0) >= 5.5)
+        tsunami_risk = sum(1 for e in combined_eqs if e.get("tsunami_risk", False))
 
         logger.success(
             f"[DataAgent] ✅ USGS data collected in {elapsed}s | "
-            f"Total={len(events)} | M≥5.5={significant} | TsunamiRisk={tsunami_risk}"
+            f"Total={len(combined_eqs)} | M≥5.5={significant} | TsunamiRisk={tsunami_risk}"
         )
 
         state = update_state_metadata(state, current_node=AGENT_NAME, data_source="USGS")
-        return {**state, "earthquake_events": events}  # type: ignore[return-value]
+        return {**state, "earthquake_events": combined_eqs}  # type: ignore[return-value]
 
     except Exception as e:
         elapsed = round(time.monotonic() - t_start, 2)

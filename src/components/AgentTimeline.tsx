@@ -70,7 +70,21 @@ export const AgentTimeline: React.FC<AgentTimelineProps> = ({
       nodeName: 'shelter_agent'
     },
     {
-      time: hasNode('replanning_agent') ? '09:35 IST' : '--:--',
+      time: hasNode('route_planning_agent') ? '09:35 IST' : '--:--',
+      title: 'Evacuation Route Planning',
+      description: 'Calculated primary and alternative evacuation routes to shelters.',
+      status: getStatus('route_planning_agent'),
+      nodeName: 'route_planning_agent'
+    },
+    {
+      time: hasNode('notification_agent') ? '09:36 IST' : '--:--',
+      title: 'Emergency Notification Dispatch',
+      description: 'Dispatched Twilio SMS and WhatsApp alerts to emergency contacts.',
+      status: getStatus('notification_agent'),
+      nodeName: 'notification_agent'
+    },
+    {
+      time: hasNode('replanning_agent') ? '09:37 IST' : '--:--',
       title: 'Dynamic Replanning Monitor',
       description: replanningActions.length > 0 
         ? `${replanningActions.length} replanning triggers active. Updated plans pushed.`
