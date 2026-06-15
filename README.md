@@ -272,3 +272,9 @@ Follow these steps to run both the backend FastAPI server and the React frontend
 * **AI Command Center**: Trigger manual disaster runs by feeding coordinates, and observe the live LangGraph iteration traces as agents evaluate and report back.
 * **Disaster Map**: View real-time USGS earthquake and weather alert coordinates mapped geographically, featuring optimal evacuation trails.
 * **Simulations**: Test scenario modifications (e.g. increase rainfall parameter by 50% or raise wind levels) and run Digital Twin forecasting simulations.
+
+----
+## 📌 MVP Status & Future Enhancements
+
+> [!IMPORTANT]
+> **MVP Status Note**: This system is currently built as a **Minimum Viable Product (MVP)**. It establishes the foundational multi-agent routing architecture (using LangGraph), demonstrates real-world API integrations (Weather, GDACS, USGS, Twilio), and simulates resource allocation strategies. The final, production-ready product will feature much deeper capabilities and robust systems.
