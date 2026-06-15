@@ -1,132 +1,254 @@
-# Disaster-AI 🌋🛡️
+# 🌋🛡️ ADCC — Autonomous Disaster Command Center
 
-Disaster-AI is an intelligent agentic system designed for automated disaster monitoring, verification, severity assessment, resource allocation, and real-time response orchestration.
+ADCC (Autonomous Disaster Command Center) is an intelligent, multi-agent AI system designed for real-time disaster monitoring, validation, severity assessment, resource allocation, and dynamic evacuation orchestration. It acts as an automated "digital twin" command center, coordinating emergency responses between live external feeds, field resources, relief shelters, and government agencies.
+
+The system is split into:
+1. **React Frontend Dashboard**: A sleek, animated dashboard built with **Vite, TypeScript, TailwindCSS (v4), Framer Motion, and Recharts**.
+2. **FastAPI Backend**: A high-performance Python backend serving REST APIs, executing simulations, and orchestrating LangGraph agents powered by **Google Gemini**.
 
 ---
 
-## 📂 Project Structure
+## 📂 Project Folder Structure
 
-Below is the directory layout of the `disaster-ai` system:
+The repository is structured as a monorepo, containing the React frontend in the root and the Python AI agent backend in the `disaster-ai/` subdirectory:
 
 ```text
-disaster-ai/
+ADCCSystem/
 │
-├── app.py                      # Main application entry point
+├── disaster-ai/                 # 🐍 PYTHON AI BACKEND
+│   ├── app.py                   # Main FastAPI entry point & API routes
+│   ├── requirements.txt         # Backend Python dependencies
+│   ├── .env.example             # Template for backend secrets & keys
+│   │
+│   ├── agents/                  # 🤖 Multi-agent orchestrators
+│   │   ├── supervisor_agent.py  # Central routing agent (evaluates State & directs sub-agents)
+│   │   ├── data_collection_agent.py # Ingests external API feeds (weather, news, USGS, etc.)
+│   │   ├── verification_agent.py    # Cross-references feeds to validate incident credibility
+│   │   ├── severity_agent.py    # Evaluates hazard magnitude, exposure, and population risk
+│   │   ├── allocation_agent.py  # Dispatches emergency resources (ambulances, boats, etc.)
+│   │   ├── shelter_agent.py     # Manages relief camp capacities & evacuation targets
+│   │   ├── route_planning_agent.py  # Calculates evacuation corridors & assembly points
+│   │   ├── replanning_agent.py  # Listens for updates (e.g. road blocks) and updates paths
+│   │   ├── notification_agent.py # Dispatches alerts to responders and citizens
+│   │   └── command_center.py    # Generates natural language summaries & explanations
+│   │
+│   ├── tools/                   # 🛠️ Integration Tools & API Wrappers
+│   │   ├── weather_tool.py      # Connects to weather forecast services (Open-Meteo)
+│   │   ├── gdacs_tool.py        # Fetches live alerts from the Global Disaster Alert System
+│   │   ├── disaster_tool.py     # Pulls real-time seismic data from USGS
+│   │   ├── news_tool.py         # Gathers hyper-local media stories via NewsAPI
+│   │   ├── route_tool.py        # Coordinates route matrices & paths (OpenRouteService)
+│   │   ├── satellite_tool.py    # Integrates earth observation imagery (Sentinel Hub)
+│   │   ├── resource_tool.py     # Interfaces with local warehouse database inventories
+│   │   ├── notification_tool.py # Connects to SMS/WhatsApp dispatch networks (Twilio)
+│   │   └── social_media_tool.py # Monitors citizen feeds and processes NLP sentiment
+│   │
+│   ├── workflows/               # 🔄 LangGraph State & Node Definitions
+│   │   ├── graph.py             # Defines the StateGraph architecture and routing
+│   │   ├── state.py             # Defines DisasterState (single shared-state object)
+│   │   └── nodes.py             # Wraps agent execution inside LangGraph nodes
+│   │
+│   ├── services/                # ⚙️ Business Logic & Engines
+│   │   ├── confidence_engine.py # Algorithms scoring report reliability across sources
+│   │   ├── simulation_engine.py # Runs Digital Twin scenario simulations (rainfall/population tweaks)
+│   │   └── normalizer.py        # Standardizes raw payload inputs
+│   │
+│   └── database/                # 🗄️ Database Schemas & Migrations
+│       ├── models.py            # PostgreSQL tables & SQLAlchemy ORM mapping
+│       ├── postgres.py          # Connection pool configurations & SQLite fallback
+│       └── seed_data.py         # Bootstraps mock disasters, hospitals, NDRF units, and shelters
 │
-├── agents/                     # Multi-agent orchestrators
-│   ├── data_collection_agent.py # Agent for gathering external feeds
-│   ├── verification_agent.py    # Agent for validating incidents
-│   ├── severity_agent.py        # Agent for assessing impact & severity
-│   ├── allocation_agent.py      # Agent for dispatching resources
-│   ├── shelter_agent.py         # Agent for managing evacuation & shelter capacity
-│   ├── replanning_agent.py      # Agent for dynamic path & resource adjustments
-│   └── command_center.py        # Central coordination agent
+├── src/                         # ⚛️ REACT + VITE + TS FRONTEND
+│   ├── main.tsx                 # Frontend application entrypoint
+│   ├── App.tsx                  # Base layout router
+│   ├── index.css                # Global styles & Tailwind v4 configurations
+│   ├── pages/                   # Dashboard screens
+│   │   ├── Dashboard.tsx        # Overview page showing metrics, graphs, and system status
+│   │   ├── AICommandCenter.tsx  # Live monitoring feed & agent iteration traces
+│   │   ├── DisasterMap.tsx      # Geospatial Leaflet map showcasing incident pins & routes
+│   │   ├── Resources.tsx        # Emergency resources list & allocation controls
+│   │   ├── Simulation.tsx       # Controls for running Digital Twin scenario simulations
+│   │   ├── Agents.tsx           # Status and activity logs of the sub-agents
+│   │   ├── Analytics.tsx        # Statistical breakdowns of past incidents & response speeds
+│   │   └── Settings.tsx         # Backend environment variables configuration panel
+│   │
+│   ├── components/              # Shared reusable UI elements
+│   ├── layouts/                 # Header, Sidebar, and Page Shell layout templates
+│   ├── contexts/                # Theme and Global State providers
+│   ├── services/                # API client wrappers (Axios integrations with backend)
+│   └── routes/                  # Route paths definition
 │
-├── tools/                      # API wrappers and integration tools
-│   ├── weather_tool.py          # Weather updates and forecasting APIs
-│   ├── news_tool.py             # Global/local news ingestion tool
-│   ├── disaster_tool.py         # Specialized disaster data streams
-│   ├── satellite_tool.py        # Satellite imagery and analysis tools
-│   ├── gdacs_tool.py            # Global Disaster Alert and Coordination System
-│   ├── route_tool.py            # Routing and distance calculations (e.g., OSRM, Google Maps)
-│   ├── notification_tool.py     # SMS, Email, and Push alert systems
-│   ├── resource_tool.py         # Resource tracking and inventory lookup
-│   └── social_media_tool.py     # Social media scraping and NLP analysis
-│
-├── workflows/                  # LangGraph-based workflow orchestrations
-│   ├── graph.py                 # Graph definition and state machine routing
-│   ├── state.py                 # State definitions and context management
-│   └── nodes.py                 # Core node execution steps
-│
-├── services/                   # Business logic engines
-│   ├── confidence_engine.py     # Algorithms to score incident report reliability
-│   ├── prediction_engine.py     # AI models for impact and hazard prediction
-│   ├── normalizer.py            # Raw data normalization and standardization
-│   └── simulation_engine.py     # Disaster impact scenario simulator
-│
-├── database/                   # Database schemas and connections
-│   ├── models.py                # Database tables and ORM definitions
-│   ├── seed_data.py             # Mock data for bootstrapping the system
-│   └── postgres.py              # PostgreSQL database client and connection pool
-│
-├── dashboard/                  # Frontend user interface
-│   ├── pages/                   # Main dashboard view components
-│   │   ├── incidents.py         # Incident tracking & management screen
-│   │   ├── resources.py         # Resource mapping & supply levels
-│   │   ├── maps.py              # Geospatial visualization layer
-│   │   └── command_center.py    # Live operation center control panel
-│   └── components/              # Shared UI widgets and reusable elements
-│
-├── data/                       # Local static datasets
-│   ├── shelters.csv             # Database of relief camp locations & capacities
-│   ├── hospitals.csv            # Hospital coordinates and bed availability
-│   ├── ndrf_units.csv           # Locations of National Disaster Response Force teams
-│   └── resources.csv            # Emergency materials inventory list
-│
-├── tests/                      # Automated test suite
-│
-├── requirements.txt            # Python dependencies
-│
-└── README.md                   # Project documentation (this file)
+├── vite.config.ts               # Vite bundler configurations
+├── package.json                 # Frontend scripts and node dependencies
+└── tsconfig.json                # TypeScript compiler config
 ```
 
 ---
 
-## 🤖 Agents and Responsibilities
+## 🤖 Agentic AI Architecture
 
-1. **`data_collection_agent.py`**
-   - Continuously monitors live data streams using integration tools (weather, news, satellite, disaster APIs, and social media feeds) to identify potential emergency signals.
-   
-2. **`verification_agent.py`**
-   - Corroborates reports across multiple data sources using the **Confidence Engine** to filter out false alarms and duplicates.
+ADCC features a **Supervisor-driven Multi-Agent Hierarchy** built with LangGraph. Instead of a hardcoded linear sequence, the system leverages a central orchestrator to evaluate the situation dynamically and execute parallel actions.
 
-3. **`severity_agent.py`**
-   - Evaluates the magnitude, population exposure, and critical infrastructure risk using prediction and simulation engines.
+```mermaid
+graph TD
+    START([START]) --> SV[Supervisor Agent]
+    
+    %% Supervisor Decisions
+    SV -- Evaluate State --> decision{Decide Next Steps}
+    
+    %% Parallel Fan-out / Routing
+    decision -- "Collect Feeds" --> DC[Data Collection Agent]
+    decision -- "Verify Report" --> VR[Verification Agent]
+    decision -- "Assess Impact" --> SA[Severity Agent]
+    decision -- "Deploy Gear (Parallel)" --> AL[Allocation Agent]
+    decision -- "Evacuate camps (Parallel)" --> SH[Shelter Agent]
+    decision -- "Plot routes" --> RP[Route Planning Agent]
+    decision -- "Dispatch Alerts" --> NT[Notification Agent]
+    decision -- "Situational Change" --> RE[Replanning Agent]
+    decision -- "Workflow Complete" --> CC[Command Center Agent]
+    
+    %% Report Back
+    DC --> SV
+    VR --> SV
+    SA --> SV
+    AL --> SV
+    SH --> SV
+    RP --> SV
+    NT --> SV
+    RE --> SV
+    CC --> SV
+    
+    SV -- "is_done = true" --> END([END])
+```
 
-4. **`allocation_agent.py`**
-   - Computes optimal distribution of relief packages, medical supplies, and personnel based on NDRF coordinates.
-
-5. **`shelter_agent.py`**
-   - Monitors shelter occupancy, routes evacuees to the nearest safe zones, and handles capacity forecasting.
-
-6. **`replanning_agent.py`**
-   - Runs continuously during an active crisis to recalculate routes and re-allocate resources if routes become blocked or conditions worsen.
-
-7. **`command_center.py`**
-   - Serves as the master orchestrator, synthesizing decisions from all sub-agents and displaying them on the live operator dashboard.
+### Sub-Agent Responsibilities:
+* **Supervisor Agent (`supervisor_agent.py`)**: The router. It inspects the `DisasterState` context and decides which sub-agents must run next or in parallel.
+* **Data Collection Agent (`data_collection_agent.py`)**: Gathers external inputs (meteorological trends, USGS earthquakes, news feeds).
+* **Verification Agent (`verification_agent.py`)**: Uses a custom **Confidence Engine** to score reports and filter out duplicates or false alarms.
+* **Severity Agent (`severity_agent.py`)**: Computes hazard impact indices (0.0 to 1.0) and translates them into qualitative levels (*Low, Medium, High, Critical*).
+* **Allocation Agent (`allocation_agent.py`)**: Evaluates proximity metrics of active National Disaster Response Force (NDRF) teams and dispatches equipment/supplies.
+* **Shelter Agent (`shelter_agent.py`)**: Dispatches evacuees to surrounding camps based on safety zones and occupancy status.
+* **Route Planning Agent (`route_planning_agent.py`)**: Outlines evacuation corridors using route-network calculations.
+* **Replanning Agent (`replanning_agent.py`)**: Monitors ongoing crisis updates and dynamically triggers alternative pathways if roadblocks occur.
+* **Notification Agent (`notification_agent.py`)**: Dispatches automated emergency broadcasts (SMS/WhatsApp) using communication networks.
+* **Command Center Agent (`command_center.py`)**: Generates natural language incident analysis summaries for operators using Gemini.
 
 ---
 
-## 🛠️ Integrated Tools
+## 🛠️ Tool Layer
 
-* **Weather Tool:** Ingests live meteorological data, cyclone tracking, and rainfall levels.
-* **News & Social Media Tools:** Monitors news sites and platform feeds for hyper-local incident updates.
-* **Satellite & GDACS Tools:** Integrates global alert systems and processes satellite images to detect floods, landslides, and wildfire perimeters.
-* **Route & Resource Tools:** Plans evacuation routes and manages inventory availability at warehouse centers.
+The **Tool Layer** isolates external API wrappers, ensuring the agents interact with consistent, typed inputs and outputs. If an external service goes offline or updates its schema, changes are restricted solely to the corresponding tool in this layer:
+
+| Tool | Source API | Purpose |
+| :--- | :--- | :--- |
+| **Weather Tool** | Open-Meteo API | Fetches local temperature, wind speeds, hourly rain forecasts, and generates alert indicators (flood, cyclone). |
+| **GDACS Tool** | GDACS RSS Feed | Monitors live global alerts regarding floods, volcanic eruptions, tropical cyclones, and wildfires. |
+| **Disaster Tool** | USGS GeoJSON Feed | Streams real-time global seismic updates, filtering events by magnitude and coordinates. |
+| **News Tool** | NewsAPI | Extracts local journalistic reports matching the disaster location to confirm reports. |
+| **Route Tool** | OpenRouteService (ORS) | Generates optimal routing coordinates, travel durations, and road-distance calculations. |
+| **Satellite Tool** | Sentinel Hub API | Requests Earth-observation imagery bands to visualize flooding outlines and fire perimeters. |
+| **Resource Tool** | Database Client | Interrogates local SQL tables to identify current available NDRF teams, ambulances, and food inventory levels. |
+| **Notification Tool**| Twilio | Sends text-based alerts containing evacuation instructions to emergency dispatch and local residents. |
+| **Social Media Tool**| News & Twitter Scrapers| Monitors posts for hyper-local activity, evaluating sentiment using natural language filters. |
+
+---
+
+## 🔄 Agentic Workflow
+
+The workflow utilizes LangGraph's state graph compilation. All nodes share a common state context defined as `DisasterState` (`workflows/state.py`).
+
+1. **State Initialization**: The graph is triggered with coordinates (Latitude, Longitude) and a Location Label. A unique `session_id` is assigned.
+2. **Supervisor Loop**:
+   - The Supervisor examines the state.
+   - If the incoming feeds are missing, it queues the `Data Collection Agent`.
+   - If the report requires confirmation, it queues the `Verification Agent`.
+   - Once verified, the `Severity Agent` determines the risk score.
+   - If the hazard level is evaluated as **High** or **Critical**, the supervisor initiates a **Parallel Fan-out**, executing both `Allocation Agent` (resource matching) and `Shelter Agent` (capacity assignments) simultaneously.
+   - The `Route Planning Agent` maps evacuation trails based on these assignments.
+   - The `Notification Agent` triggers Twilio updates, setting `notification_sent = true` to prevent duplicates.
+   - The `Command Center Agent` synthesizes a natural language briefing.
+3. **Completion**: When all agents have finished execution and the summary is compiled, the supervisor marks the decision status as `is_done = true`, routing the graph to `END`.
+4. **Safety Counter**: The graph includes a safety threshold capping the loop at `10 iterations`. If an infinite routing loop is detected, execution is aborted, and emergency states are saved.
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- Python 3.10+
-- PostgreSQL database
+Follow these steps to run both the backend FastAPI server and the React frontend dashboard locally:
 
-### Installation
-1. Clone the repository:
+### 1. Prerequisites
+* **Python**: Version `3.10` or higher.
+* **Node.js**: Version `18.0` or higher (includes `npm`).
+* **Database**: PostgreSQL (recommended) or falls back to a local SQLite instance (`adcc_sqlite.db`) if a live PostgreSQL connection isn't configured.
+
+---
+
+### 2. Backend Setup (FastAPI + AI Agents)
+
+1. Navigate to the backend directory:
    ```bash
-   git clone https://github.com/your-org/disaster-ai.git
    cd disaster-ai
    ```
-2. Install dependencies:
+2. Create and activate a Python virtual environment:
+   ```bash
+   # On Windows (PowerShell)
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
+
+   # On macOS/Linux
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Initialize the database and run seed data:
+4. Copy the environment template file:
    ```bash
-   python database/seed_data.py
+   cp .env.example .env
    ```
-4. Run the main application:
+5. Open `.env` and provide your credentials:
+   ```env
+   # Database connection string (PostgreSQL)
+   DATABASE_URL=postgresql://postgres:password@localhost:5432/adcc_db
+
+   # AI Agent model authorization
+   GOOGLE_API_KEY=your_google_gemini_api_key
+
+   # Tool APIs (Optional but recommended for full tool functionality)
+   NEWS_API_KEY=your_news_api_key
+   ORS_API_KEY=your_openrouteservice_api_key
+   TWILIO_ACCOUNT_SID=your_twilio_sid
+   TWILIO_AUTH_TOKEN=your_twilio_token
+   TWILIO_PHONE_NUMBER=your_twilio_phone
+   ```
+6. Run the FastAPI backend:
    ```bash
-   python app.py
+   uvicorn app:app --reload
    ```
+   * *Note: On startup, the backend automatically connects to the database, creates the required SQL tables, and seeds mock data (hospitals, resources, NDRF units, shelters) if the tables are empty.*
+   * You can test that the API is running by loading the interactive Swagger docs at `http://127.0.0.1:8000/docs`.
+
+---
+
+### 3. Frontend Setup (React + Vite)
+
+1. Open a new terminal in the root directory (`ADCCSystem/`):
+   ```bash
+   cd ..
+   ```
+2. Install frontend dependencies:
+   ```bash
+   npm install
+   ```
+3. Launch the Vite local dev server:
+   ```bash
+   npm run dev
+   ```
+4. Open the displayed URL in your browser (usually `http://localhost:5173`).
+
+### 🛡️ Dashboard Features & Usage
+* **Dashboard Overview**: Check aggregate live alerts, resource utilization stats, and active disaster statuses.
+* **AI Command Center**: Trigger manual disaster runs by feeding coordinates, and observe the live LangGraph iteration traces as agents evaluate and report back.
+* **Disaster Map**: View real-time USGS earthquake and weather alert coordinates mapped geographically, featuring optimal evacuation trails.
+* **Simulations**: Test scenario modifications (e.g. increase rainfall parameter by 50% or raise wind levels) and run Digital Twin forecasting simulations.
