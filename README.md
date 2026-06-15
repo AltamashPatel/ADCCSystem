@@ -8,6 +8,26 @@ The system is split into:
 
 ---
 
+## 🖼️ User Interface Previews
+
+Below are the visual interfaces of the Autonomous Disaster Command Center:
+
+### 1. Operations Dashboard
+*The central command board showcasing active emergencies, recent alert dispatch feeds, resource inventory counts, and key metrics.*
+<img width="1918" height="903" alt="image" src="https://github.com/user-attachments/assets/aa721201-072c-4b6b-afa4-d913a7c34fd7" />
+
+
+### 2. Real-time GIS Disaster Map
+*An interactive geospatial map showcasing active disaster coordinates, hospitals, shelter locations, and safe evacuation corridors.*
+<img width="1918" height="917" alt="image" src="https://github.com/user-attachments/assets/a7bb35db-9a37-4d26-9c52-bd7d1b2cb400" />
+
+
+### 3. AI Command Center
+*The live execution window displaying node-by-node LangGraph agent loops alongside a conversational chatbot to ask recommendations.*
+<img width="1917" height="907" alt="image" src="https://github.com/user-attachments/assets/8e7293d5-7c3b-4dbf-b9d8-da2b1ea9aefa" />
+
+---
+
 ## 📂 Project Folder Structure
 
 The repository is structured as a monorepo, containing the React frontend in the root and the Python AI agent backend in the `disaster-ai/` subdirectory:
