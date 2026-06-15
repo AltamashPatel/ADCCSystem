@@ -1,6 +1,7 @@
-# 🌋🛡️ ADCC — Autonomous Disaster Command Center
+***Far Away Hackathon Submission***  
+**Theme:** *Agentic and Autonomous Systems*
 
-> 🚀 Developed for the **Far Away Hackathon** under the theme **Agentic and Autonomous Systems**.
+# 🌋🛡️ ADCC — Autonomous Disaster Command Center
 
 ADCC (Autonomous Disaster Command Center) is an intelligent, multi-agent AI system designed for real-time disaster monitoring, validation, severity assessment, resource allocation, and dynamic evacuation orchestration. It acts as an automated "digital twin" command center, coordinating emergency responses between live external feeds, field resources, relief shelters, and government agencies.
 
