@@ -1,0 +1,500 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* ── Core Palette ─────────────────────────────────────────── */
+  --color-adcc-bg:           #0D1526;
+  --color-adcc-surface:      #111D35;
+  --color-adcc-surface2:     #162040;
+  --color-adcc-card:         rgba(17, 29, 53, 0.70);
+  --color-adcc-border:       rgba(255, 255, 255, 0.06);
+  --color-adcc-borderHover:  rgba(0, 224, 255, 0.22);
+
+  /* ── Accent / Brand ───────────────────────────────────────── */
+  --color-adcc-accent:       #00E0FF;
+  --color-adcc-accentDim:    rgba(0, 224, 255, 0.12);
+  --color-adcc-accentGlow:   rgba(0, 224, 255, 0.08);
+  --color-adcc-accentBorder: rgba(0, 224, 255, 0.20);
+
+  /* ── Semantic ─────────────────────────────────────────────── */
+  --color-adcc-danger:       #F43F5E;
+  --color-adcc-warning:      #F59E0B;
+  --color-adcc-success:      #10B981;
+  --color-adcc-info:         #3B82F6;
+
+  /* ── Text ─────────────────────────────────────────────────── */
+  --color-adcc-textPrimary:  #EEF2FF;
+  --color-adcc-textSecondary:#A8B8D8;
+  --color-adcc-textMuted:    #6B7FA3;
+
+  /* ── Typography ───────────────────────────────────────────── */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+  /* ── Shadows ──────────────────────────────────────────────── */
+  --shadow-glow:      0 0 24px rgba(0, 224, 255, 0.14);
+  --shadow-glowHeavy: 0 0 40px rgba(0, 224, 255, 0.28);
+  --shadow-card:      0 4px 24px rgba(0, 0, 0, 0.32), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --shadow-elevated:  0 8px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME OVERRIDES  (applied when <html class="light">)
+═══════════════════════════════════════════════════════════════ */
+:root.light {
+  --color-adcc-bg:            #F1F5F9;
+  --color-adcc-surface:       #FFFFFF;
+  --color-adcc-surface2:      #F8FAFC;
+  --color-adcc-card:          rgba(255, 255, 255, 0.85);
+  --color-adcc-border:        rgba(15, 23, 42, 0.09);
+  --color-adcc-borderHover:   rgba(0, 180, 216, 0.35);
+  --color-adcc-accent:        #0284C7;
+  --color-adcc-accentDim:     rgba(2, 132, 199, 0.10);
+  --color-adcc-accentGlow:    rgba(2, 132, 199, 0.06);
+  --color-adcc-accentBorder:  rgba(2, 132, 199, 0.22);
+  --color-adcc-textPrimary:   #0F172A;
+  --color-adcc-textSecondary: #334155;
+  --color-adcc-textMuted:     #64748B;
+  --shadow-card:              0 4px 24px rgba(15, 23, 42, 0.08), 0 1px 0 rgba(255,255,255,0.9) inset;
+  --shadow-elevated:          0 8px 40px rgba(15, 23, 42, 0.12);
+  --shadow-glow:              0 0 24px rgba(2, 132, 199, 0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: rgba(0,224,255,0.12); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,224,255,0.30); }
+
+/* ═══════════════════════════════════════════════════════════════
+   BASE
+═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: var(--color-adcc-bg, #0D1526);
+  color: var(--color-adcc-textPrimary, #EEF2FF);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DOT GRID BACKGROUND  (parallax via CSS vars set in JS)
+═══════════════════════════════════════════════════════════════ */
+.dot-grid {
+  background-image: 
+    radial-gradient(circle at center, rgba(6, 182, 212, 0.55) 2.2px, transparent 2.2px), 
+    radial-gradient(circle at center, rgba(168, 85, 247, 0.40) 2.2px, transparent 2.2px);
+  background-size: 32px 32px, 64px 64px;
+  transform: translate(
+    calc(var(--mouse-x, 0) * -14px),
+    calc(var(--mouse-y, 0) * -14px)
+  );
+  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+:root.light .dot-grid {
+  background-image: 
+    radial-gradient(circle at center, rgba(2, 132, 199, 0.50) 2.2px, transparent 2.2px), 
+    radial-gradient(circle at center, rgba(13, 148, 136, 0.40) 2.2px, transparent 2.2px);
+  background-size: 32px 32px, 64px 64px;
+}
+
+/* Legacy alias */
+.grid-bg {
+  background-image: radial-gradient(rgba(0, 224, 255, 0.04) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GLASS CARDS
+═══════════════════════════════════════════════════════════════ */
+.glass-panel {
+  background: linear-gradient(
+    135deg,
+    rgba(17, 29, 53, 0.72) 0%,
+    rgba(13, 21, 38, 0.82) 100%
+  );
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--shadow-card);
+  transform: translate(
+    calc(var(--mouse-x, 0) * 1.8px),
+    calc(var(--mouse-y, 0) * 1.8px)
+  );
+  transition:
+    transform      0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color   0.3s ease,
+    box-shadow     0.3s ease,
+    background     0.35s ease;
+}
+
+:root.light .glass-panel {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.82) 0%,
+    rgba(248, 250, 252, 0.90) 100%
+  );
+  border-color: rgba(15, 23, 42, 0.09);
+}
+
+.glass-panel:hover {
+  border-color: rgba(0, 224, 255, 0.18);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px rgba(0, 224, 255, 0.06),
+    0 12px 40px rgba(0, 224, 255, 0.06);
+  transform: translate(
+    calc(var(--mouse-x, 0) * 2.8px),
+    calc(var(--mouse-y, 0) * 2.8px)
+  ) scale(1.012);
+}
+
+:root.light .glass-panel:hover {
+  border-color: rgba(2, 132, 199, 0.25);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px rgba(2, 132, 199, 0.08),
+    0 12px 40px rgba(2, 132, 199, 0.06);
+}
+
+.glass-panel-heavy {
+  background: rgba(10, 16, 30, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 224, 255, 0.12);
+  box-shadow: var(--shadow-elevated);
+  transition: background 0.35s ease;
+}
+
+:root.light .glass-panel-heavy {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(2, 132, 199, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUTTONS  (global base)
+═══════════════════════════════════════════════════════════════ */
+button, .btn {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FORM INPUTS  (global base)
+═══════════════════════════════════════════════════════════════ */
+input, select, textarea {
+  background: rgba(13, 21, 38, 0.80);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #EEF2FF;
+  border-radius: 8px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.35s ease, color 0.35s ease;
+  outline: none;
+}
+:root.light input, :root.light select, :root.light textarea {
+  background: rgba(248, 250, 252, 0.90);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0F172A;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(0, 224, 255, 0.40);
+  box-shadow: 0 0 0 3px rgba(0, 224, 255, 0.08);
+}
+:root.light input:focus, :root.light select:focus, :root.light textarea:focus {
+  border-color: rgba(2, 132, 199, 0.45);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.10);
+}
+select option {
+  background: #111D35;
+  color: #EEF2FF;
+}
+:root.light select option {
+  background: #FFFFFF;
+  color: #0F172A;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RANGE SLIDERS
+═══════════════════════════════════════════════════════════════ */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 99px;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #00E0FF;
+  box-shadow: 0 0 8px rgba(0,224,255,0.5);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 14px rgba(0,224,255,0.7);
+}
+input[type="range"]:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHECKBOXES
+═══════════════════════════════════════════════════════════════ */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  background: rgba(13,21,38,0.8);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+input[type="checkbox"]:checked {
+  background: #00E0FF;
+  border-color: #00E0FF;
+  box-shadow: 0 0 8px rgba(0,224,255,0.4);
+}
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: 2px solid #0D1526;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATUS PULSE DOT
+═══════════════════════════════════════════════════════════════ */
+@keyframes status-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%       { opacity: 1;    transform: scale(1.18); }
+}
+.status-pulse-dot { animation: status-pulse 2.2s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SCANNER LINE  (subtle, low opacity)
+═══════════════════════════════════════════════════════════════ */
+@keyframes scan-line {
+  0%   { top: -2px; }
+  100% { top: 100%; }
+}
+.scanner-overlay::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, transparent 0%, rgba(0,224,255,0.18) 50%, transparent 100%);
+  left: 0;
+  animation: scan-line 12s linear infinite;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROUTE ANIMATION  (map polylines)
+═══════════════════════════════════════════════════════════════ */
+@keyframes route-flow { to { stroke-dashoffset: -20; } }
+.animated-route-line { animation: route-flow 1.6s linear infinite !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   FLOATING PARTICLES
+═══════════════════════════════════════════════════════════════ */
+@keyframes float-particle {
+  0%   { transform: translate(0, 0) scale(1);      opacity: 0.08; }
+  33%  { transform: translate(28px, -48px) scale(1.1); opacity: 0.20; }
+  66%  { transform: translate(-14px, -22px) scale(0.95); opacity: 0.12; }
+  100% { transform: translate(0, 0) scale(1);      opacity: 0.08; }
+}
+.animate-float-particle { animation: float-particle 50s linear infinite; }
+
+/* ═══════════════════════════════════════════════════════════════
+   FADE-IN  (for map markers etc.)
+═══════════════════════════════════════════════════════════════ */
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+
+/* ═══════════════════════════════════════════════════════════════
+   GLOW PULSE  (critical alerts)
+═══════════════════════════════════════════════════════════════ */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(244, 63, 94, 0.3); }
+  50%       { box-shadow: 0 0 20px rgba(244, 63, 94, 0.6); }
+}
+.glow-pulse-danger { animation: glow-pulse 2s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SIDEBAR NAV ACTIVE INDICATOR
+═══════════════════════════════════════════════════════════════ */
+.nav-active-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #00E0FF 0%, rgba(0,224,255,0.3) 100%);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px rgba(0,224,255,0.5);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLE ROWS
+═══════════════════════════════════════════════════════════════ */
+.adcc-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.2s ease;
+}
+:root.light .adcc-table tbody tr {
+  border-bottom-color: rgba(15, 23, 42, 0.06);
+}
+.adcc-table tbody tr:hover {
+  background: rgba(0, 224, 255, 0.04);
+}
+:root.light .adcc-table tbody tr:hover {
+  background: rgba(2, 132, 199, 0.05);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL OVERLAY
+═══════════════════════════════════════════════════════════════ */
+.modal-overlay {
+  background: rgba(8, 13, 24, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+:root.light .modal-overlay {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GRADIENT TEXT
+═══════════════════════════════════════════════════════════════ */
+.gradient-text {
+  background: linear-gradient(90deg, #00E0FF 0%, #3B82F6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+:root.light .gradient-text {
+  background: linear-gradient(90deg, #0284C7 0%, #2563EB 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOUSE SPOTLIGHT  (radial glow that follows cursor)
+═══════════════════════════════════════════════════════════════ */
+.mouse-spotlight {
+  background: radial-gradient(
+    650px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+    rgba(6, 182, 212, 0.28) 0%,
+    rgba(168, 85, 247, 0.12) 40%,
+    transparent 80%
+  );
+  pointer-events: none;
+  transition: background 0.1s ease;
+}
+:root.light .mouse-spotlight {
+  background: radial-gradient(
+    650px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+    rgba(2, 132, 199, 0.32) 0%,
+    rgba(13, 148, 136, 0.15) 45%,
+    transparent 80%
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION DIVIDER
+═══════════════════════════════════════════════════════════════ */
+.section-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,224,255,0.15), transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LEAFLET MAP OVERRIDES
+═══════════════════════════════════════════════════════════════ */
+.leaflet-control-layers {
+  background: rgba(13, 21, 38, 0.92) !important;
+  border: 1px solid rgba(0,224,255,0.15) !important;
+  border-radius: 10px !important;
+  color: #EEF2FF !important;
+  backdrop-filter: blur(12px);
+}
+.leaflet-control-layers-toggle {
+  background-color: rgba(0,224,255,0.1) !important;
+}
+.leaflet-control-layers label {
+  color: #A8B8D8 !important;
+  font-size: 11px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TACTICAL SATELLITE TILE FILTERS
+   ═══════════════════════════════════════════════════════════════ */
+.tactical-satellite-tiles .leaflet-tile {
+  filter: brightness(0.65) contrast(1.4) saturate(0.45) hue-rotate(190deg) invert(0.08);
+}
+.light .tactical-satellite-tiles .leaflet-tile {
+  filter: brightness(0.9) contrast(1.1) saturate(0.7) hue-rotate(185deg);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TACTICAL HUD GLASSMORPHISM PANELS (3D Depth)
+   ═══════════════════════════════════════════════════════════════ */
+.tactical-hud-panel {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(8, 13, 24, 0.72);
+  border: 1px solid rgba(6, 182, 212, 0.16);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+:root.light .tactical-hud-panel {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(15, 23, 42, 0.09);
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.tactical-hud-panel:hover {
+  transform: perspective(1000px) rotateX(1deg) translateZ(8px) scale(1.015);
+  border-color: rgba(6, 182, 212, 0.35);
+  box-shadow: 0 25px 50px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(6, 182, 212, 0.06);
+}
+
+:root.light .tactical-hud-panel:hover {
+  border-color: rgba(2, 132, 199, 0.25);
+  box-shadow: 0 25px 50px -10px rgba(15, 23, 42, 0.1), 0 0 20px rgba(2, 132, 199, 0.06);
+}
+
+
