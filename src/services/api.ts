@@ -19,6 +19,7 @@ export interface BackendDisaster {
   status: 'Active' | 'Monitoring' | 'Resolved' | 'Archived';
   latitude: number;
   longitude: number;
+  country?: string;
   affected_population?: number;
   confidence_score?: number;
   source?: string;
@@ -33,11 +34,16 @@ export interface BackendDisaster {
 export interface BackendResource {
   id: string;
   resource_name: string;
-  resource_type: 'Boat' | 'Ambulance' | 'Medical_Team' | 'Rescue_Team' | 'Helicopter' | 'Food_Truck' | 'NDRF_Unit';
+  resource_type: 'Boat' | 'Ambulance' | 'Medical_Team' | 'Medical Team' | 'Rescue_Team' | 'Rescue Team' | 'Helicopter' | 'Food_Truck' | 'NDRF_Unit' | 'Robot' | 'Evacuation_Team' | 'Evacuation Team';
   status: 'Available' | 'Busy' | 'Maintenance';
   quantity: number;
   latitude?: number;
   longitude?: number;
+  country?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  model_spec?: string;
+  capabilities?: string;
   last_updated: string;
 }
 
@@ -45,6 +51,7 @@ export interface BackendHospital {
   id: string;
   name: string;
   city: string;
+  country?: string;
   total_beds: number;
   available_beds: number;
   latitude: number;
@@ -55,6 +62,7 @@ export interface BackendShelter {
   id: string;
   name: string;
   city: string;
+  country?: string;
   capacity: number;
   occupied: number;
   latitude: number;
@@ -99,7 +107,23 @@ export interface BackendAllocation {
   resource_id: string;
   quantity: number;
   allocation_reason?: string;
-  status: 'Active' | 'Completed' | 'Cancelled';
+  status: 'Pending Approval' | 'Dispatched' | 'En Route' | 'Reached' | 'Issue Reported' | 'Active' | 'Completed' | 'Cancelled';
+  distance_km?: number;
+  eta_minutes?: number;
+  route_name?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  human_verified_by?: string;
+  human_verified_at?: string;
+  field_status_notes?: string;
+  issue_description?: string;
+  disaster_title?: string;
+  disaster_type?: string;
+  disaster_severity?: string;
+  disaster_country?: string;
+  resource_name?: string;
+  resource_type?: string;
+  resource_model?: string;
   allocated_at: string;
   completed_at?: string;
 }
@@ -217,21 +241,41 @@ export const apiService = {
   },
 
   // Allocations
-  getAllocations: async (): Promise<BackendAllocation[]> => {
-    const { data } = await api.get<BackendAllocation[]>('/api/allocations');
+  getAllocations: async (disasterId?: string, status?: string): Promise<BackendAllocation[]> => {
+    const params = new URLSearchParams();
+    if (disasterId) params.append('disaster_id', disasterId);
+    if (status) params.append('status', status);
+    const { data } = await api.get<BackendAllocation[]>(`/api/allocations?${params.toString()}`);
     return data;
   },
   
-  createAllocation: async (allocation: Omit<BackendAllocation, 'id' | 'allocated_at'>): Promise<BackendAllocation> => {
+  createAllocation: async (allocation: Partial<BackendAllocation>): Promise<BackendAllocation> => {
     const { data } = await api.post<BackendAllocation>('/api/allocations', allocation);
+    return data;
+  },
+
+  verifyAllocation: async (id: string, payload: {
+    status: string;
+    human_verified_by?: string;
+    field_status_notes?: string;
+    issue_description?: string;
+  }): Promise<BackendAllocation> => {
+    const { data } = await api.patch<BackendAllocation>(`/api/allocations/${id}/verify`, payload);
     return data;
   },
 
   recommendAllocation: async (disasterId: string): Promise<{
     resource_id: string;
     resource_name: string;
+    resource_type: string;
+    model_spec: string;
+    contact_name: string;
+    contact_phone: string;
+    capabilities: string;
     quantity: number;
     distance_km: number;
+    distance_miles: number;
+    eta_minutes: number;
     route_name: string;
     recommendation_reason: string;
   }> => {

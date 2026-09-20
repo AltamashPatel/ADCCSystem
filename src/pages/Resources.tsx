@@ -3,19 +3,50 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiService, { BackendResource, BackendDisaster, BackendAllocation } from '../services/api';
 import PageContainer from '../components/PageContainer';
 import SectionHeader from '../components/SectionHeader';
+import HumanVerificationTable from '../components/HumanVerificationTable';
 import {
-  Boxes, Truck, Plus, Minus, ShieldAlert, Navigation,
-  Warehouse, HeartPulse, Ship, Ambulance, CheckCircle,
-  FileSpreadsheet, Cpu
+  Boxes,
+  Truck,
+  Plus,
+  Minus,
+  ShieldAlert,
+  Navigation,
+  Warehouse,
+  HeartPulse,
+  Ship,
+  Ambulance,
+  CheckCircle,
+  FileSpreadsheet,
+  Cpu,
+  Bot,
+  Users,
+  Phone
 } from 'lucide-react';
 
 export const Resources: React.FC = () => {
   const queryClient = useQueryClient();
 
-  const { data: resources = [], isLoading: resourcesLoading } = useQuery<BackendResource[]>({ queryKey: ['resources'], queryFn: apiService.getResources });
-  const { data: disasters = [] } = useQuery<BackendDisaster[]>({ queryKey: ['disasters'], queryFn: apiService.getDisasters });
-  const { data: allocations = [] } = useQuery<BackendAllocation[]>({ queryKey: ['allocations'], queryFn: apiService.getAllocations });
+  // Filters
+  const [regionFilter, setRegionFilter] = useState<'all' | 'USA' | 'India'>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
 
+  // Live queries
+  const { data: resources = [], isLoading: resourcesLoading } = useQuery<BackendResource[]>({
+    queryKey: ['resources'],
+    queryFn: apiService.getResources
+  });
+
+  const { data: disasters = [] } = useQuery<BackendDisaster[]>({
+    queryKey: ['disasters'],
+    queryFn: apiService.getDisasters
+  });
+
+  const { data: allocations = [] } = useQuery<BackendAllocation[]>({
+    queryKey: ['allocations'],
+    queryFn: () => apiService.getAllocations()
+  });
+
+  // Local State for Dispatch
   const [selectedDisasterId, setSelectedDisasterId] = useState('');
   const [selectedResourceId, setSelectedResourceId] = useState('');
   const [dispatchQty, setDispatchQty] = useState(1);
@@ -43,7 +74,12 @@ export const Resources: React.FC = () => {
     setIsAiLoading(true); setDispatchError(null);
     try {
       const rec = await apiService.recommendAllocation(selectedDisasterId);
-      dispatchMutation.mutate({ disaster_id: selectedDisasterId, resource_id: rec.resource_id, quantity: rec.quantity, allocation_reason: rec.recommendation_reason });
+      dispatchMutation.mutate({
+        disaster_id: selectedDisasterId,
+        resource_id: rec.resource_id,
+        quantity: rec.quantity,
+        allocation_reason: rec.recommendation_reason
+      });
     } catch (err: any) {
       setDispatchError(err.response?.data?.detail || 'Failed to auto-dispatch.');
     } finally { setIsAiLoading(false); }
@@ -63,10 +99,21 @@ export const Resources: React.FC = () => {
 
   const handleDispatchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDisasterId || !selectedResourceId || dispatchQty <= 0) { setDispatchError('Specify disaster, resource, and positive quantity.'); return; }
+    if (!selectedDisasterId || !selectedResourceId || dispatchQty <= 0) {
+      setDispatchError('Specify disaster, resource, and positive quantity.');
+      return;
+    }
     const res = resources.find(r => r.id === selectedResourceId);
-    if (!res || res.quantity < dispatchQty) { setDispatchError('Insufficient resource quantity in stock.'); return; }
-    dispatchMutation.mutate({ disaster_id: selectedDisasterId, resource_id: selectedResourceId, quantity: dispatchQty, allocation_reason: dispatchReason || 'Command Center Manual Dispatch' });
+    if (!res || res.quantity < dispatchQty) {
+      setDispatchError('Insufficient resource quantity in stock.');
+      return;
+    }
+    dispatchMutation.mutate({
+      disaster_id: selectedDisasterId,
+      resource_id: selectedResourceId,
+      quantity: dispatchQty,
+      allocation_reason: dispatchReason || 'Command Center Manual Dispatch'
+    });
   };
 
   const totalFleetUnits = resources.reduce((s, r) => s + r.quantity, 0);
@@ -74,13 +121,16 @@ export const Resources: React.FC = () => {
   const busyUnits       = resources.filter(r => r.status === 'Busy').reduce((s, r) => s + r.quantity, 0);
   const maintUnits      = resources.filter(r => r.status === 'Maintenance').reduce((s, r) => s + r.quantity, 0);
 
-  const getResourceIcon = (type: string, size = 14) => {
+  const getResourceIcon = (type: string, size = 15) => {
     switch (type.toLowerCase()) {
-      case 'boat':         return <Ship       size={size} className="text-[#38BDF8]"       />;
-      case 'ambulance':    return <Ambulance  size={size} className="text-adcc-warning"    />;
-      case 'medical_team': return <HeartPulse size={size} className="text-adcc-accent"     />;
-      case 'ndrf_unit':    return <Warehouse  size={size} className="text-adcc-success"    />;
-      default:             return <Boxes      size={size} className="text-purple-400"      />;
+      case 'robot': return <Bot className="text-cyan-400" size={size} />;
+      case 'evacuation team':
+      case 'evacuation_team': return <Users className="text-amber-400" size={size} />;
+      case 'boat': return <Ship className="text-[#38BDF8]" size={size} />;
+      case 'ambulance': return <Ambulance className="text-rose-400" size={size} />;
+      case 'medical_team': return <HeartPulse className="text-adcc-accent" size={size} />;
+      case 'ndrf_unit': return <Warehouse className="text-adcc-success" size={size} />;
+      default: return <Boxes className="text-purple-400" size={size} />;
     }
   };
 
@@ -93,11 +143,20 @@ export const Resources: React.FC = () => {
   };
 
   const getAllocationLabel = (id: string) => {
-    const a = allocations.find(a => a.resource_id === id && a.status === 'Active');
+    const a = allocations.find(a => a.resource_id === id && (a.status === 'Active' || a.status === 'Dispatched' || a.status === 'En Route'));
     if (!a) return 'Unallocated (Depot Reserves)';
     const d = disasters.find(d => d.id === a.disaster_id);
     return d ? `Deployed: ${d.title}` : 'Deployed to Active Incident';
   };
+
+  // Filtered resources
+  const filteredResources = resources.filter(r => {
+    const matchesRegion = regionFilter === 'all' || 
+      (regionFilter === 'USA' && (r.country === 'USA' || (r.longitude && r.longitude < -30))) ||
+      (regionFilter === 'India' && (r.country === 'India' || (r.longitude && r.longitude > 60)));
+    const matchesType = typeFilter === 'all' || r.resource_type.toLowerCase() === typeFilter.toLowerCase();
+    return matchesRegion && matchesType;
+  });
 
   const kpiCards = [
     { label: 'Total Fleet',       value: totalFleetUnits, color: 'text-adcc-textPrimary' },
@@ -106,18 +165,18 @@ export const Resources: React.FC = () => {
     { label: 'In Maintenance',    value: maintUnits,      color: 'text-adcc-danger'      },
   ];
 
-  const inputCls = "w-full text-[11px] font-mono rounded-xl px-3 py-2.5";
+  const inputCls = "w-full text-[11px] font-mono rounded-xl px-3 py-2.5 bg-adcc-surface2 border border-adcc-border focus:border-adcc-accent";
   const labelCls = "text-[10px] font-mono uppercase font-semibold text-adcc-textMuted";
 
   return (
     <PageContainer>
       <SectionHeader
         title="Resource Ingestion & Deployment"
-        description="Monitor responder reserves, deploy manual overrides, and view log sheets."
+        description="Monitor responder reserves, deploy manual overrides, and view field verification telemetry across USA and India."
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpiCards.map(({ label, value, color }) => (
           <div key={label} className="glass-panel rounded-2xl p-4 flex flex-col gap-1.5">
             <span className={`text-[10px] font-mono uppercase font-bold tracking-wider ${color}`}>{label}</span>
@@ -130,48 +189,143 @@ export const Resources: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        {/* Resource Table */}
-        <div className="xl:col-span-2">
+        {/* Resource Table Registry Sheets (2 Cols) */}
+        <div className="xl:col-span-2 flex flex-col gap-6">
           <div className="glass-panel rounded-2xl p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <h3 className="text-[11px] font-bold font-mono uppercase tracking-wider text-adcc-textPrimary flex items-center gap-1.5">
-                <FileSpreadsheet size={13} className="text-adcc-accent" />
-                Live Command Inventory Registry
-              </h3>
-              <span className="text-[9px] font-mono text-adcc-accent uppercase">Live Ingest ({resources.length} nodes)</span>
+            <div className="flex flex-wrap items-center justify-between pb-3 gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="flex items-center gap-2">
+                <h3 className="text-[11px] font-bold font-mono uppercase tracking-wider text-adcc-textPrimary flex items-center gap-1.5">
+                  <FileSpreadsheet size={14} className="text-adcc-accent" />
+                  Fleet Inventory Registry
+                </h3>
+                <span className="text-[9px] font-mono text-adcc-accent uppercase">({filteredResources.length} nodes)</span>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="flex items-center gap-2 font-mono text-[10px]">
+                {/* Region Filter Buttons */}
+                <div className="flex items-center gap-1 bg-adcc-surface2 border border-adcc-border p-0.5 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setRegionFilter('all')}
+                    className={`px-2 py-0.5 rounded font-bold uppercase transition-all ${
+                      regionFilter === 'all' ? 'bg-adcc-accent text-adcc-bg font-black' : 'text-adcc-textMuted hover:text-white'
+                    }`}
+                  >
+                    🌐 All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegionFilter('USA')}
+                    className={`px-2 py-0.5 rounded font-bold uppercase transition-all ${
+                      regionFilter === 'USA' ? 'bg-cyan-500 text-adcc-bg font-black' : 'text-adcc-textMuted hover:text-white'
+                    }`}
+                  >
+                    🇺🇸 USA & Robotics
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegionFilter('India')}
+                    className={`px-2 py-0.5 rounded font-bold uppercase transition-all ${
+                      regionFilter === 'India' ? 'bg-amber-500 text-adcc-bg font-black' : 'text-adcc-textMuted hover:text-white'
+                    }`}
+                  >
+                    🇮🇳 India
+                  </button>
+                </div>
+
+                {/* Type Filter */}
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="bg-adcc-surface2 border border-adcc-border text-adcc-textPrimary text-[10px] rounded-lg px-2 py-1 font-mono outline-none focus:border-adcc-accent"
+                >
+                  <option value="all">ALL TYPES</option>
+                  <option value="Robot">🤖 ROBOTS (UGV/UAV)</option>
+                  <option value="Evacuation Team">👥 EVACUATION TEAMS</option>
+                  <option value="Ambulance">🚑 AMBULANCES</option>
+                  <option value="Boat">🚤 BOATS</option>
+                  <option value="Medical_Team">🏥 MEDICAL TEAMS</option>
+                  <option value="NDRF_Unit">🛡️ NDRF UNITS</option>
+                </select>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left font-mono text-[11px] text-adcc-textMuted border-collapse">
                 <thead>
                   <tr className="text-adcc-textSecondary bg-adcc-surface2/50 text-[9px] uppercase tracking-wider" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <th className="py-2.5 px-3">Resource Name</th>
-                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Resource & Hardware Spec</th>
+                    <th className="py-2.5 px-3">Type & Base</th>
                     <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3">Location</th>
+                    <th className="py-2.5 px-3">Responder Contact</th>
                     <th className="py-2.5 px-3">Qty</th>
                     <th className="py-2.5 px-3">Deployment</th>
                   </tr>
                 </thead>
                 <tbody className="adcc-table">
                   {resourcesLoading ? (
-                    <tr><td colSpan={6} className="py-8 text-center text-[11px] text-adcc-textMuted animate-pulse">TUNING LOGISTICS TELEMETRY LINKS...</td></tr>
-                  ) : resources.length === 0 ? (
-                    <tr><td colSpan={6} className="py-8 text-center text-[11px] text-adcc-textMuted">NO RESOURCE REGISTRIES DETECTED</td></tr>
-                  ) : resources.map(res => (
-                    <tr key={res.id} className="hover:bg-adcc-accentGlow/30 transition-colors">
-                      <td className="py-3 px-3 font-semibold text-adcc-textPrimary">
-                        <span className="flex items-center gap-1.5">{getResourceIcon(res.resource_type)}{res.resource_name}</span>
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-adcc-textMuted animate-pulse">
+                        TUNING LOGISTICS TELEMETRY LINKS...
                       </td>
-                      <td className="py-3 px-3 text-[10px] uppercase">{res.resource_type.replace('_', ' ')}</td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase border ${getStatusBadge(res.status)}`}>{res.status}</span>
-                      </td>
-                      <td className="py-3 px-3 text-[10px]">{res.latitude ? `(${res.latitude.toFixed(2)}, ${res.longitude?.toFixed(2)})` : 'CENTRAL DEPOT'}</td>
-                      <td className="py-3 px-3 text-adcc-accent font-bold">{res.quantity}</td>
-                      <td className="py-3 px-3 text-[10.5px] truncate max-w-[180px]" title={getAllocationLabel(res.id)}>{getAllocationLabel(res.id)}</td>
                     </tr>
-                  ))}
+                  ) : filteredResources.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-adcc-textMuted">
+                        NO RESOURCE MATCHING SELECTED REGION/TYPE FILTER
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredResources.map((res) => (
+                      <tr key={res.id} className="hover:bg-adcc-accentGlow/20 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-start gap-2">
+                            <div className="mt-0.5 shrink-0">
+                              {getResourceIcon(res.resource_type, 15)}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-adcc-textPrimary">{res.resource_name}</span>
+                              {res.model_spec && (
+                                <span className="text-[9px] text-cyan-400 font-sans">{res.model_spec}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] uppercase font-semibold text-adcc-textPrimary">{res.resource_type.replace('_', ' ')}</span>
+                            <span className={`px-1.5 py-0.2 self-start rounded text-[8px] font-bold uppercase border ${
+                              res.country === 'USA' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                            }`}>
+                              {res.country === 'USA' ? '🇺🇸 USA' : '🇮🇳 India'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase border ${getStatusBadge(res.status)}`}>
+                            {res.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {res.contact_phone ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-adcc-textPrimary font-semibold text-[10px]">{res.contact_name || 'Fleet Lead'}</span>
+                              <a href={`tel:${res.contact_phone}`} className="text-adcc-accent hover:underline flex items-center gap-1 font-mono text-[9px]">
+                                <Phone size={9} /> {res.contact_phone}
+                              </a>
+                            </div>
+                          ) : (
+                            <span className="text-adcc-textMuted text-[10px]">--</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-adcc-accent font-bold">{res.quantity}</td>
+                        <td className="py-2.5 px-3 text-[10.5px] truncate max-w-[170px]" title={getAllocationLabel(res.id)}>
+                          {getAllocationLabel(res.id)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -206,11 +360,11 @@ export const Resources: React.FC = () => {
                 <span className="text-adcc-textMuted leading-relaxed">AI evaluates closest reserves, path routing, and deployment reasons.</span>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button type="button" disabled={isAiLoading} onClick={handleAiRecommend}
-                    className="py-2 px-2 border border-adcc-accentBorder hover:border-adcc-accent hover:text-adcc-accent text-adcc-textMuted rounded-lg font-bold uppercase transition-colors">
+                    className="py-2 px-2 border border-adcc-accentBorder hover:border-adcc-accent hover:text-adcc-accent text-adcc-textMuted rounded-lg font-bold uppercase transition-colors cursor-pointer">
                     {isAiLoading ? 'Evaluating...' : '🤖 Suggest'}
                   </button>
                   <button type="button" disabled={isAiLoading || dispatchMutation.isPending} onClick={handleAiAutoDispatch}
-                    className="py-2 px-2 bg-adcc-accentDim border border-adcc-accentBorder hover:bg-adcc-accent hover:text-adcc-bg text-adcc-textPrimary rounded-lg font-bold uppercase transition-colors">
+                    className="py-2 px-2 bg-adcc-accentDim border border-adcc-accentBorder hover:bg-adcc-accent hover:text-adcc-bg text-adcc-textPrimary rounded-lg font-bold uppercase transition-colors cursor-pointer">
                     {dispatchMutation.isPending ? 'Deploying...' : '🤖 Dispatch'}
                   </button>
                 </div>
@@ -231,13 +385,13 @@ export const Resources: React.FC = () => {
               <label className={labelCls}>Deploy Quantity</label>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setDispatchQty(p => Math.max(1, p - 1))}
-                  className="p-2.5 border border-adcc-border rounded-xl hover:bg-adcc-surface2 text-adcc-accent transition-colors">
+                  className="p-2.5 border border-adcc-border rounded-xl hover:bg-adcc-surface2 text-adcc-accent transition-colors cursor-pointer">
                   <Minus size={12} />
                 </button>
                 <input type="number" value={dispatchQty} onChange={e => setDispatchQty(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="flex-1 text-center font-mono text-sm py-2 rounded-xl" />
+                  className="flex-1 text-center font-mono text-sm py-2 rounded-xl bg-adcc-surface2 border border-adcc-border" />
                 <button type="button" onClick={() => setDispatchQty(p => p + 1)}
-                  className="p-2.5 border border-adcc-border rounded-xl hover:bg-adcc-surface2 text-adcc-accent transition-colors">
+                  className="p-2.5 border border-adcc-border rounded-xl hover:bg-adcc-surface2 text-adcc-accent transition-colors cursor-pointer">
                   <Plus size={12} />
                 </button>
               </div>
@@ -247,7 +401,7 @@ export const Resources: React.FC = () => {
               <label className={labelCls}>Deployment Reason / Notes</label>
               <input type="text" value={dispatchReason} onChange={e => setDispatchReason(e.target.value)}
                 placeholder="Tactical reinforcement backup..."
-                className="text-[11px] rounded-xl px-3 py-2.5" />
+                className={inputCls} />
             </div>
 
             {dispatchError && (
@@ -262,12 +416,18 @@ export const Resources: React.FC = () => {
             )}
 
             <button type="submit" disabled={dispatchMutation.isPending}
-              className="w-full flex items-center justify-center gap-1.5 py-3 mt-1 bg-adcc-accentDim border border-adcc-accentBorder hover:bg-adcc-accent hover:text-adcc-bg text-[11px] font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-200 disabled:opacity-50">
+              className="w-full flex items-center justify-center gap-1.5 py-3 mt-1 bg-adcc-accentDim border border-adcc-accentBorder hover:bg-adcc-accent hover:text-adcc-bg text-[11px] font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-200 disabled:opacity-50 cursor-pointer">
               <Navigation size={13} /> Dispatch Tactical Override
             </button>
           </form>
         </div>
       </div>
+
+      {/* Operational Dispatch Verification & Responder Status Console */}
+      <div className="mt-8">
+        <HumanVerificationTable />
+      </div>
+
     </PageContainer>
   );
 };

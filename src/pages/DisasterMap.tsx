@@ -5,7 +5,8 @@ import apiService, {
   BackendDisaster, 
   BackendHospital, 
   BackendShelter, 
-  BackendResource 
+  BackendResource,
+  BackendAllocation 
 } from '../services/api';
 import PageContainer from '../components/PageContainer';
 import SectionHeader from '../components/SectionHeader';
@@ -22,7 +23,8 @@ import {
   Boxes,
   Map as MapIcon,
   RefreshCw,
-  Cpu
+  Cpu,
+  Phone
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -35,36 +37,128 @@ type MapEntity =
 
 const getSimulatedRouteSteps = (res: BackendResource, dis: BackendDisaster, distKm: number) => {
   const steps: string[] = [];
-  steps.push(`Depart ${res.resource_name} Depot location at (${res.latitude?.toFixed(3)}°N, ${res.longitude?.toFixed(3)}°E)`);
+  const isUsa = res.country?.toUpperCase() === 'USA' || dis.country?.toUpperCase() === 'USA' || (res.longitude && res.longitude < -30);
   
-  let routeName = "National Highway Corridor";
-  if (distKm < 200) {
-    if (res.resource_name.includes("MH") || dis.title.toLowerCase().includes("mumbai") || dis.title.toLowerCase().includes("pune")) {
-      routeName = "Mumbai-Pune Expressway / NH-48";
-      steps.push("Merge onto NH-48 Expressway heading West towards Mumbai.");
-      steps.push("Proceed through Lonavala toll plaza, keeping right at Expressway fork.");
-      steps.push("Enter Mumbai Metropolitan Region via Vashi / Sion Corridor.");
-    } else if (dis.title.toLowerCase().includes("rishikesh") || dis.title.toLowerCase().includes("delhi")) {
-      routeName = "NH-334 Bypass Corridor";
-      steps.push("Merge onto NH-58 / NH-334 heading North via Meerut-Haridwar Highway.");
-      steps.push("Proceed along Haridwar bypass, keeping right towards Rishikesh.");
+  steps.push(`Depart ${res.resource_name} Depot at (${res.latitude?.toFixed(3)}°, ${res.longitude?.toFixed(3)}°)`);
+  
+  let routeName = isUsa ? "US Interstate Logistics Corridor" : "National Highway Corridor";
+  if (isUsa) {
+    if (dis.title.toLowerCase().includes("california") || dis.title.toLowerCase().includes("los angeles") || dis.title.toLowerCase().includes("san francisco") || res.resource_name.toLowerCase().includes("california") || res.resource_name.toLowerCase().includes("ca")) {
+      routeName = "I-5 / US-101 Pacific Transit Corridor";
+      steps.push("Deploy via Interstate 5 North/South emergency transit lane with priority beacon protocol.");
+      steps.push("Transition to US-101 / local highway link toward disaster staging perimeter.");
+    } else if (dis.title.toLowerCase().includes("florida") || dis.title.toLowerCase().includes("tampa") || dis.title.toLowerCase().includes("miami") || res.resource_name.toLowerCase().includes("florida") || res.resource_name.toLowerCase().includes("fl")) {
+      routeName = "I-75 / I-4 Sunshine State Corridor";
+      steps.push("Deploy along I-75 / I-4 expressway coordinating with Florida Highway Patrol.");
+      steps.push("Advance toward regional emergency mobilization zone outside flood perimeter.");
+    } else if (dis.title.toLowerCase().includes("texas") || dis.title.toLowerCase().includes("houston") || res.resource_name.toLowerCase().includes("texas") || res.resource_name.toLowerCase().includes("tx")) {
+      routeName = "I-10 / I-45 Gulf Freeway Corridor";
+      steps.push("Access I-10 East emergency convoy route cleared by Texas DPS.");
+      steps.push("Proceed directly to Houston Metro rapid-response staging hub.");
     } else {
-      routeName = "State Highway Corridor";
-      steps.push("Merge onto closest regional highway link heading towards incident zone.");
+      routeName = "US Federal Disaster Response Corridor";
+      steps.push("Transit along US Interstate highway under FEMA Blue Sky priority dispatch.");
     }
   } else {
-    if (dis.title.toLowerCase().includes("guwahati") || dis.title.toLowerCase().includes("assam") || dis.title.toLowerCase().includes("kolkata")) {
-      routeName = "NH-27 East-West Highway Corridor";
-      steps.push("Merge onto NH-12 heading North towards Siliguri corridor.");
-      steps.push("Connect to NH-27 (East-West Highway) heading East via Bongaigaon.");
+    if (distKm < 200) {
+      if (res.resource_name.includes("MH") || dis.title.toLowerCase().includes("mumbai") || dis.title.toLowerCase().includes("pune")) {
+        routeName = "Mumbai-Pune Expressway / NH-48";
+        steps.push("Merge onto NH-48 Expressway heading West towards Mumbai.");
+        steps.push("Proceed through Lonavala toll plaza, keeping right at Expressway fork.");
+        steps.push("Enter Mumbai Metropolitan Region via Vashi / Sion Corridor.");
+      } else if (dis.title.toLowerCase().includes("rishikesh") || dis.title.toLowerCase().includes("delhi")) {
+        routeName = "NH-334 Bypass Corridor";
+        steps.push("Merge onto NH-58 / NH-334 heading North via Meerut-Haridwar Highway.");
+        steps.push("Proceed along Haridwar bypass, keeping right towards Rishikesh.");
+      } else {
+        routeName = "State Highway Corridor";
+        steps.push("Merge onto closest regional highway link heading towards incident zone.");
+      }
     } else {
-      routeName = "National Highway Corridor (NH-27 / NH-48)";
-      steps.push("Proceed along National Highway corridor towards target zone coordinates.");
+      if (dis.title.toLowerCase().includes("guwahati") || dis.title.toLowerCase().includes("assam") || dis.title.toLowerCase().includes("kolkata")) {
+        routeName = "NH-27 East-West Highway Corridor";
+        steps.push("Merge onto NH-12 heading North towards Siliguri corridor.");
+        steps.push("Connect to NH-27 (East-West Highway) heading East via Bongaigaon.");
+      } else {
+        routeName = "National Highway Corridor (NH-27 / NH-48)";
+        steps.push("Proceed along National Highway corridor towards target zone coordinates.");
+      }
     }
   }
   
-  steps.push(`Arrive at ${dis.title} epicenter coordinates (${dis.latitude.toFixed(3)}°N, ${dis.longitude.toFixed(3)}°E) for emergency dispatch.`);
+  steps.push(`Arrive at ${dis.title} target zone (${dis.latitude.toFixed(3)}°, ${dis.longitude.toFixed(3)}°) for emergency operations.`);
   return { routeName, steps };
+};
+
+const getResourceMarkerHtml = (res: BackendResource) => {
+  const type = res.resource_type.toLowerCase();
+
+  // High-Tech Robot Marker (Cyan Glow)
+  if (type === 'robot') {
+    return `
+      <div class="relative flex items-center justify-center animate-fade-in" style="width: 34px; height: 34px;" title="${res.resource_name} (${res.model_spec || 'Robotics'})">
+        <div class="absolute inset-0 rounded-full animate-ping opacity-35" style="background-color: #06B6D4; animation-duration: 2.2s;"></div>
+        <div class="w-7 h-7 rounded-full border-2 border-cyan-400 flex items-center justify-center text-cyan-300 transition-all duration-200 hover:scale-125" 
+             style="background: radial-gradient(circle, rgba(6,182,212,0.4) 0%, #06111E 100%); box-shadow: 0 0 14px rgba(6, 182, 212, 0.85);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  // Evacuation Team Marker (Amber Glow)
+  if (type === 'evacuation team' || type === 'evacuation_team') {
+    return `
+      <div class="relative flex items-center justify-center animate-fade-in" style="width: 30px; height: 30px;" title="${res.resource_name}">
+        <div class="w-6 h-6 rounded-full border-2 border-amber-400 flex items-center justify-center text-amber-300 transition-all duration-200 hover:scale-125" 
+             style="background: #78350F; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  // Ambulance Marker (Red/White)
+  if (type === 'ambulance') {
+    return `
+      <div class="relative flex items-center justify-center animate-fade-in" style="width: 28px; height: 28px;" title="${res.resource_name}">
+        <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white transition-all duration-200 hover:scale-115" 
+             style="background-color: #DC2626; box-shadow: 0 2px 6px rgba(0,0,0,0.65);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 17h4V9h-4z"/><path d="M19 17h2b-2 0"/><path d="M14 9V5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4z"/><path d="M7 11h4"/><path d="M9 9v4"/>
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  // Boat Marker (Marine Blue)
+  if (type === 'boat') {
+    return `
+      <div class="relative flex items-center justify-center animate-fade-in" style="width: 28px; height: 28px;" title="${res.resource_name}">
+        <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white transition-all duration-200 hover:scale-115" 
+             style="background-color: #0284C7; box-shadow: 0 2px 6px rgba(0,0,0,0.65);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10V2"/>
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  // Generic Default
+  return `
+    <div class="relative flex items-center justify-center animate-fade-in" style="width: 28px; height: 28px;" title="${res.resource_name}">
+      <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white transition-all duration-200 hover:scale-115" 
+           style="background-color: #16A34A; box-shadow: 0 2px 5px rgba(0,0,0,0.65);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+      </div>
+    </div>
+  `;
 };
 
 const getDisasterMarkerHtml = (type: string, severity: string, status: string) => {
@@ -159,6 +253,7 @@ export const DisasterMap: React.FC = () => {
   // Filters
   const [filterType, setFilterType] = useState<string>('all');
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
+  const [region, setRegion] = useState<'all' | 'USA' | 'India'>('all');
 
   // Map Refs
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -169,18 +264,49 @@ export const DisasterMap: React.FC = () => {
   const { data: disasters = [] } = useQuery({ queryKey: ['disasters'], queryFn: apiService.getDisasters });
   const { data: hospitals = [] } = useQuery({ queryKey: ['hospitals'], queryFn: apiService.getHospitals });
   const { data: shelters = [] } = useQuery({ queryKey: ['shelters'], queryFn: apiService.getShelters });
-  const { data: resources = [] } = useQuery({ queryKey: ['resources'], queryFn: apiService.getResources });
-  const { data: allocations = [] } = useQuery({ queryKey: ['allocations'], queryFn: apiService.getAllocations });
+  const { data: resources = [] } = useQuery<BackendResource[]>({ queryKey: ['resources'], queryFn: apiService.getResources });
+  const { data: allocations = [] } = useQuery<BackendAllocation[]>({ queryKey: ['allocations'], queryFn: () => apiService.getAllocations() });
 
-  // Filter disasters
+  // Region matcher helper
+  const isMatchingRegion = (itemCountry?: string, lng?: number) => {
+    if (region === 'all') return true;
+    if (region === 'USA') {
+      return itemCountry?.toUpperCase() === 'USA' || (lng !== undefined && lng < -30);
+    }
+    if (region === 'India') {
+      return itemCountry?.toUpperCase() === 'INDIA' || (lng !== undefined && lng > 60 && lng < 100);
+    }
+    return true;
+  };
+
+  // Region camera jump
+  const handleRegionChange = (newRegion: 'all' | 'USA' | 'India') => {
+    setRegion(newRegion);
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (newRegion === 'USA') {
+      map.flyTo([38.5, -96.5], 4, { duration: 1.2 });
+    } else if (newRegion === 'India') {
+      map.flyTo([22.5, 80.0], 5, { duration: 1.2 });
+    } else {
+      map.flyTo([25.0, 10.0], 2.5, { duration: 1.2 });
+    }
+  };
+
+  // Filtered lists
   const filteredDisasters = disasters.filter(d => {
     const matchesType = filterType === 'all' || d.disaster_type.toLowerCase() === filterType.toLowerCase();
     const matchesSeverity = filterSeverity === 'all' || d.severity.toLowerCase() === filterSeverity.toLowerCase();
     const matchesSearch = searchQuery === '' || 
       d.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       d.disaster_type.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesSeverity && matchesSearch;
+    const inRegion = isMatchingRegion(d.country, d.longitude);
+    return matchesType && matchesSeverity && matchesSearch && inRegion;
   });
+
+  const filteredHospitals = hospitals.filter(h => isMatchingRegion(h.country, h.longitude));
+  const filteredShelters = shelters.filter(s => isMatchingRegion(s.country, s.longitude));
+  const filteredResources = resources.filter(r => isMatchingRegion(r.country, r.longitude));
 
   const getDisasterIcon = (type: string, size = 16) => {
     switch (type.toLowerCase()) {
@@ -212,15 +338,18 @@ export const DisasterMap: React.FC = () => {
 
 
   // Broad fallback bounds
+  // Broad fallback bounds
   const getMapBounds = () => {
     const points: Array<{ lat: number; lng: number }> = [];
     if (showDisasters) filteredDisasters.forEach(d => points.push({ lat: d.latitude, lng: d.longitude }));
-    if (showHospitals) hospitals.forEach(h => points.push({ lat: h.latitude, lng: h.longitude }));
-    if (showShelters) shelters.forEach(s => points.push({ lat: s.latitude, lng: s.longitude }));
-    if (showResources) resources.forEach(r => { if (r.latitude && r.longitude) points.push({ lat: r.latitude, lng: r.longitude }); });
+    if (showHospitals) filteredHospitals.forEach(h => points.push({ lat: h.latitude, lng: h.longitude }));
+    if (showShelters) filteredShelters.forEach(s => points.push({ lat: s.latitude, lng: s.longitude }));
+    if (showResources) filteredResources.forEach(r => { if (r.latitude && r.longitude) points.push({ lat: r.latitude, lng: r.longitude }); });
 
     if (points.length === 0) {
-      return { minLat: 8.33, maxLat: 37.44, minLng: 65.22, maxLng: 97.68 };
+      if (region === 'USA') return { minLat: 24.5, maxLat: 49.3, minLng: -125.0, maxLng: -66.9 };
+      if (region === 'India') return { minLat: 8.33, maxLat: 37.44, minLng: 65.22, maxLng: 97.68 };
+      return { minLat: 8.33, maxLat: 49.3, minLng: -125.0, maxLng: 97.68 };
     }
     const lats = points.map(p => p.lat);
     const lngs = points.map(p => p.lng);
@@ -245,9 +374,9 @@ export const DisasterMap: React.FC = () => {
     }
 
     const map = L.map(mapContainerRef.current, {
-      center: [20.5937, 78.9629], // Center of India
-      zoom: 5,
-      minZoom: 3,
+      center: [25.0, 10.0], // Global initial view
+      zoom: 3,
+      minZoom: 2,
       maxZoom: 18,
       attributionControl: false
     });
@@ -336,7 +465,7 @@ export const DisasterMap: React.FC = () => {
 
     // 2. Render Hospitals
     if (showHospitals) {
-      hospitals.forEach(h => {
+      filteredHospitals.forEach(h => {
         const marker = L.marker([h.latitude, h.longitude], {
           icon: L.divIcon({
             className: 'custom-hospital-pin',
@@ -359,7 +488,7 @@ export const DisasterMap: React.FC = () => {
 
     // 3. Render Shelters
     if (showShelters) {
-      shelters.forEach(s => {
+      filteredShelters.forEach(s => {
         const marker = L.marker([s.latitude, s.longitude], {
           icon: L.divIcon({
             className: 'custom-shelter-pin',
@@ -382,21 +511,14 @@ export const DisasterMap: React.FC = () => {
 
     // 4. Render Resources
     if (showResources) {
-      resources.forEach(r => {
+      filteredResources.forEach(r => {
         if (!r.latitude || !r.longitude) return;
         const marker = L.marker([r.latitude, r.longitude], {
           icon: L.divIcon({
             className: 'custom-resource-pin',
-            html: `
-              <div class="relative flex items-center justify-center animate-fade-in" style="width: 28px; height: 28px;">
-                <div class="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white transition-all duration-200 hover:scale-115" 
-                     style="background-color: #16A34A; box-shadow: 0 2px 5px rgba(0,0,0,0.65);">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                </div>
-              </div>
-            `,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
+            html: getResourceMarkerHtml(r),
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
           })
         });
         marker.on('click', () => setSelectedEntity({ type: 'resource', data: r }));
@@ -404,10 +526,11 @@ export const DisasterMap: React.FC = () => {
       });
     }
 
-    // 5. Render Routing Paths for Active Allocations
+    // 5. Render Routing Paths for Active/Dispatched Allocations
     if (showRoutes) {
       allocations.forEach(alloc => {
-        if (alloc.status !== 'Active') return;
+        const isRouteActive = alloc.status === 'Active' || alloc.status === 'Dispatched' || alloc.status === 'En Route';
+        if (!isRouteActive) return;
         
         const resource = resources.find(r => r.id === alloc.resource_id);
         const disaster = disasters.find(d => d.id === alloc.disaster_id);
@@ -423,7 +546,7 @@ export const DisasterMap: React.FC = () => {
           const polyline = L.polyline(
             [[resource.latitude, resource.longitude], [disaster.latitude, disaster.longitude]],
             {
-              color: '#00E5FF',
+              color: alloc.issue_description ? '#EF4444' : '#00E5FF',
               weight: 3,
               dashArray: '8, 8',
               opacity: 0.85,
@@ -450,7 +573,7 @@ export const DisasterMap: React.FC = () => {
         }
       });
     }
-  }, [showDisasters, showHospitals, showShelters, showResources, showRoutes, filteredDisasters, hospitals, shelters, resources, allocations]);
+  }, [showDisasters, showHospitals, showShelters, showResources, showRoutes, filteredDisasters, filteredHospitals, filteredShelters, filteredResources, allocations, region]);
 
   // Fit bounds dynamically on initial data load
   useEffect(() => {
@@ -459,9 +582,9 @@ export const DisasterMap: React.FC = () => {
 
     const points: Array<[number, number]> = [];
     if (showDisasters) filteredDisasters.forEach(d => points.push([d.latitude, d.longitude]));
-    if (showHospitals) hospitals.forEach(h => points.push([h.latitude, h.longitude]));
-    if (showShelters) shelters.forEach(s => points.push([s.latitude, s.longitude]));
-    if (showResources) resources.forEach(r => { if (r.latitude && r.longitude) points.push([r.latitude, r.longitude]); });
+    if (showHospitals) filteredHospitals.forEach(h => points.push([h.latitude, h.longitude]));
+    if (showShelters) filteredShelters.forEach(s => points.push([s.latitude, s.longitude]));
+    if (showResources) filteredResources.forEach(r => { if (r.latitude && r.longitude) points.push([r.latitude, r.longitude]); });
 
     if (points.length > 0) {
       mapInstanceRef.current.fitBounds(points, { padding: [50, 50], maxZoom: 8 });
@@ -472,7 +595,7 @@ export const DisasterMap: React.FC = () => {
     <PageContainer>
       <SectionHeader 
         title="Tactical Incident Map" 
-        description="Geospatial overlay of live disasters, hospitals, shelters, and resource allocations."
+        description="Geospatial overlay of live disasters, hospitals, shelters, and resource allocations across USA and India."
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-210px)] min-h-[550px]">
@@ -483,6 +606,46 @@ export const DisasterMap: React.FC = () => {
           {/* Map Top Bar (Filters & Layers) */}
           <div className="p-3 flex flex-wrap items-center justify-between gap-3 z-[1001] border-b border-adcc-border bg-adcc-surface/75 backdrop-blur-xl">
             <div className="flex items-center gap-2 text-xs font-mono">
+              {/* Region Jump Controls */}
+              <div className="flex items-center gap-1 border-r border-gray-800 pr-2.5 mr-1">
+                <button
+                  type="button"
+                  onClick={() => handleRegionChange('all')}
+                  className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                    region === 'all' 
+                      ? 'bg-adcc-accent text-adcc-bg font-black shadow-sm' 
+                      : 'text-adcc-textMuted hover:text-adcc-textPrimary bg-adcc-bg border border-gray-850'
+                  }`}
+                  title="Global View (USA + India)"
+                >
+                  🌐 Global
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRegionChange('USA')}
+                  className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                    region === 'USA' 
+                      ? 'bg-cyan-500 text-adcc-bg font-black shadow-[0_0_12px_rgba(6,182,212,0.4)]' 
+                      : 'text-adcc-textMuted hover:text-adcc-textPrimary bg-adcc-bg border border-gray-850'
+                  }`}
+                  title="United States Operations (NOAA / USGS / Robotics)"
+                >
+                  🇺🇸 USA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRegionChange('India')}
+                  className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                    region === 'India' 
+                      ? 'bg-amber-500 text-adcc-bg font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]' 
+                      : 'text-adcc-textMuted hover:text-adcc-textPrimary bg-adcc-bg border border-gray-850'
+                  }`}
+                  title="India Operations"
+                >
+                  🇮🇳 India
+                </button>
+              </div>
+
               {disasters.some(d => d.source === 'DEMO') && (
                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded text-amber-500 font-mono text-[10px] font-bold tracking-wider mr-2">
                   <span className="flex h-1.5 w-1.5 relative">
@@ -499,7 +662,7 @@ export const DisasterMap: React.FC = () => {
                 className="text-[11px] font-mono rounded-lg px-2.5 py-1.5 bg-adcc-surface border border-adcc-border"
               >
                 <option value="all">ALL HAZARDS</option>
-                <option value="cyclone">CYCLONES</option>
+                <option value="cyclone">CYCLONES / HURRICANES</option>
                 <option value="wildfire">WILDFIRES</option>
                 <option value="flood">FLOODS</option>
                 <option value="earthquake">EARTHQUAKES</option>
@@ -523,7 +686,7 @@ export const DisasterMap: React.FC = () => {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-adcc-accentDim border border-adcc-accentBorder hover:bg-adcc-accent hover:text-adcc-bg text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-all duration-200 ml-2 disabled:opacity-50 cursor-pointer"
               >
                 <RefreshCw size={11} className={syncMutation.isPending ? 'animate-spin' : ''} />
-                {syncMutation.isPending ? 'Syncing...' : 'Sync Live'}
+                {syncMutation.isPending ? 'Syncing...' : 'Sync Live NWS/GDACS'}
               </button>
             </div>
 
@@ -749,6 +912,16 @@ export const DisasterMap: React.FC = () => {
                   {selectedEntity.type === 'disaster' && (
                     <div className="space-y-2.5 mt-2">
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                        <span className="text-adcc-textMuted">Operational Region:</span>
+                        <span className="font-semibold text-adcc-textPrimary flex items-center gap-1">
+                          {(selectedEntity.data as BackendDisaster).country === 'USA' ? '🇺🇸 United States' : '🇮🇳 India'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                        <span className="text-adcc-textMuted">Telemetry Ingest:</span>
+                        <span className="font-semibold text-adcc-accent">{(selectedEntity.data as BackendDisaster).source || 'NOAA / GDACS'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-adcc-border pb-1.5">
                         <span className="text-adcc-textMuted">Hazard Type:</span>
                         <span className="font-semibold text-adcc-textPrimary">{(selectedEntity.data as BackendDisaster).disaster_type}</span>
                       </div>
@@ -776,6 +949,12 @@ export const DisasterMap: React.FC = () => {
                   {selectedEntity.type === 'hospital' && (
                     <div className="space-y-2.5 mt-2">
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                        <span className="text-adcc-textMuted">Operational Region:</span>
+                        <span className="font-semibold text-adcc-textPrimary">
+                          {(selectedEntity.data as BackendHospital).country === 'USA' ? '🇺🇸 USA' : '🇮🇳 India'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-adcc-border pb-1.5">
                         <span className="text-adcc-textMuted">City Location:</span>
                         <span className="font-semibold text-adcc-textPrimary">{(selectedEntity.data as BackendHospital).city}</span>
                       </div>
@@ -792,6 +971,12 @@ export const DisasterMap: React.FC = () => {
 
                   {selectedEntity.type === 'shelter' && (
                     <div className="space-y-2.5 mt-2">
+                      <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                        <span className="text-adcc-textMuted">Operational Region:</span>
+                        <span className="font-semibold text-adcc-textPrimary">
+                          {(selectedEntity.data as BackendShelter).country === 'USA' ? '🇺🇸 USA' : '🇮🇳 India'}
+                        </span>
+                      </div>
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
                         <span className="text-adcc-textMuted">City Location:</span>
                         <span className="font-semibold text-adcc-textPrimary">{(selectedEntity.data as BackendShelter).city}</span>
@@ -831,9 +1016,27 @@ export const DisasterMap: React.FC = () => {
                   {selectedEntity.type === 'resource' && (
                     <div className="space-y-2.5 mt-2">
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                        <span className="text-adcc-textMuted">Fleet Region:</span>
+                        <span className="font-semibold text-adcc-textPrimary flex items-center gap-1">
+                          {(selectedEntity.data as BackendResource).country === 'USA' ? '🇺🇸 United States' : '🇮🇳 India'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-adcc-border pb-1.5">
                         <span className="text-adcc-textMuted">Equipment Type:</span>
                         <span className="font-semibold text-adcc-textPrimary">{(selectedEntity.data as BackendResource).resource_type.replace('_', ' ')}</span>
                       </div>
+                      {(selectedEntity.data as BackendResource).model_spec && (
+                        <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                          <span className="text-adcc-textMuted">Model / Spec:</span>
+                          <span className="font-semibold text-cyan-400">{(selectedEntity.data as BackendResource).model_spec}</span>
+                        </div>
+                      )}
+                      {(selectedEntity.data as BackendResource).capabilities && (
+                        <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                          <span className="text-adcc-textMuted">Capabilities:</span>
+                          <span className="font-medium text-adcc-textPrimary text-[10px]">{(selectedEntity.data as BackendResource).capabilities}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
                         <span className="text-adcc-textMuted">Current Status:</span>
                         <span className={`font-bold ${
@@ -846,6 +1049,23 @@ export const DisasterMap: React.FC = () => {
                         <span className="text-adcc-textMuted">Reserves Quantity:</span>
                         <span className="font-bold text-adcc-textPrimary">{(selectedEntity.data as BackendResource).quantity} units</span>
                       </div>
+                      {(selectedEntity.data as BackendResource).contact_name && (
+                        <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                          <span className="text-adcc-textMuted">Unit Commander:</span>
+                          <span className="font-semibold text-adcc-textPrimary">{(selectedEntity.data as BackendResource).contact_name}</span>
+                        </div>
+                      )}
+                      {(selectedEntity.data as BackendResource).contact_phone && (
+                        <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                          <span className="text-adcc-textMuted">Direct Line:</span>
+                          <a 
+                            href={`tel:${(selectedEntity.data as BackendResource).contact_phone}`} 
+                            className="font-bold text-adcc-accent hover:underline flex items-center gap-1"
+                          >
+                            <Phone size={10} /> {(selectedEntity.data as BackendResource).contact_phone}
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -860,8 +1080,10 @@ export const DisasterMap: React.FC = () => {
                         <span className="font-bold text-adcc-textPrimary">{(selectedEntity.data as any).disasterTitle}</span>
                       </div>
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
-                        <span className="text-adcc-textMuted">Direct Distance:</span>
-                        <span className="font-bold text-adcc-accent">{(selectedEntity.data as any).distanceKm.toFixed(1)} km</span>
+                        <span className="text-adcc-textMuted">Distance / Transit:</span>
+                        <span className="font-bold text-adcc-accent">
+                          {(selectedEntity.data as any).distanceKm.toFixed(1)} km ({((selectedEntity.data as any).distanceKm * 0.621371).toFixed(1)} mi)
+                        </span>
                       </div>
                       
                       {/* ETA Sparkline Index */}
@@ -877,6 +1099,23 @@ export const DisasterMap: React.FC = () => {
                       <div className="flex justify-between border-b border-adcc-border pb-1.5">
                         <span className="text-adcc-success uppercase">{(selectedEntity.data as any).status}</span>
                       </div>
+                      {(selectedEntity.data as any).contact_phone && (
+                        <div className="flex justify-between border-b border-adcc-border pb-1.5">
+                          <span className="text-adcc-textMuted">Responder Phone:</span>
+                          <a 
+                            href={`tel:${(selectedEntity.data as any).contact_phone}`} 
+                            className="font-bold text-adcc-accent hover:underline flex items-center gap-1"
+                          >
+                            <Phone size={10} /> {(selectedEntity.data as any).contact_phone}
+                          </a>
+                        </div>
+                      )}
+                      {(selectedEntity.data as any).issue_description && (
+                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-[10px]">
+                          <span className="font-bold uppercase tracking-wider block mb-1">⚠️ Field Impediment Reported:</span>
+                          {(selectedEntity.data as any).issue_description}
+                        </div>
+                      )}
                       
                       <div className="flex flex-col gap-1 mt-2">
                         <span className="text-adcc-textMuted uppercase text-[8px] font-bold tracking-wider">Tactical Routing Waypoints:</span>

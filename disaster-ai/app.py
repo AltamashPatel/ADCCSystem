@@ -145,6 +145,7 @@ class DisasterCreate(BaseModel):
     status: DisasterStatus = DisasterStatus.ACTIVE
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
+    country: Optional[str] = "India"
     affected_population: Optional[int] = None
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     source: Optional[str] = None
@@ -161,6 +162,7 @@ class DisasterResponse(BaseModel):
     status: DisasterStatus
     latitude: float
     longitude: float
+    country: str = "India"
     affected_population: Optional[int]
     confidence_score: Optional[float]
     source: Optional[str]
@@ -184,6 +186,11 @@ class ResourceCreate(BaseModel):
     quantity: int = Field(1, ge=1)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    country: Optional[str] = "India"
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    model_spec: Optional[str] = None
+    capabilities: Optional[str] = None
 
 
 class ResourceResponse(BaseModel):
@@ -194,6 +201,11 @@ class ResourceResponse(BaseModel):
     quantity: int
     latitude: Optional[float]
     longitude: Optional[float]
+    country: str = "India"
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    model_spec: Optional[str] = None
+    capabilities: Optional[str] = None
     last_updated: datetime
 
     class Config:
@@ -318,7 +330,22 @@ class AllocationCreate(BaseModel):
     resource_id: uuid.UUID
     quantity: int = Field(1, ge=1)
     allocation_reason: Optional[str] = None
-    status: AllocationStatus = AllocationStatus.ACTIVE
+    status: AllocationStatus = AllocationStatus.PENDING_APPROVAL
+    distance_km: Optional[float] = None
+    eta_minutes: Optional[int] = None
+    route_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    human_verified_by: Optional[str] = None
+    field_status_notes: Optional[str] = None
+    issue_description: Optional[str] = None
+
+
+class AllocationVerifyRequest(BaseModel):
+    status: AllocationStatus
+    human_verified_by: Optional[str] = "Command_Duty_Officer"
+    field_status_notes: Optional[str] = None
+    issue_description: Optional[str] = None
 
 
 class AllocationResponse(BaseModel):
@@ -328,6 +355,25 @@ class AllocationResponse(BaseModel):
     quantity: int
     allocation_reason: Optional[str]
     status: AllocationStatus
+    distance_km: Optional[float] = None
+    eta_minutes: Optional[int] = None
+    route_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    human_verified_by: Optional[str] = None
+    human_verified_at: Optional[datetime] = None
+    field_status_notes: Optional[str] = None
+    issue_description: Optional[str] = None
+
+    # Joined helper fields for dashboard tables
+    disaster_title: Optional[str] = None
+    disaster_type: Optional[str] = None
+    disaster_severity: Optional[str] = None
+    disaster_country: Optional[str] = None
+    resource_name: Optional[str] = None
+    resource_type: Optional[str] = None
+    resource_model: Optional[str] = None
+
     allocated_at: datetime
     completed_at: Optional[datetime]
 
@@ -449,21 +495,58 @@ def get_disaster(disaster_id: uuid.UUID, db: Session = Depends(get_db)):
 @app.post("/api/disasters/sync", tags=["Disasters"])
 def sync_disasters_endpoint(db: Session = Depends(get_db)):
     """
-    Fetch active disasters from GDACS and USGS, insert new ones, and update existing ones.
+    Fetch active disasters from NOAA NWS (USA), GDACS (Global/India), and USGS (Earthquakes),
+    insert new ones, and update existing ones.
     """
     try:
         from tools.gdacs_tool import get_active_disasters
         from tools.disaster_tool import get_recent_earthquakes
+        from tools.nws_tool import get_active_usa_disasters
         
-        # 1. Fetch from GDACS
+        synced_count = 0
+
+        # 1. Fetch live USA alerts from NOAA NWS
+        try:
+            nws_events = get_active_usa_disasters(limit=30)
+            for ne in nws_events:
+                existing = db.query(Disaster).filter(
+                    (Disaster.title == ne.title) | 
+                    ((Disaster.source_url == ne.source_url) & (ne.source_url is not None))
+                ).first()
+
+                if not existing:
+                    d_type = DisasterType.FLOOD
+                    if ne.event_type == "Cyclone": d_type = DisasterType.CYCLONE
+                    elif ne.event_type == "Wildfire": d_type = DisasterType.WILDFIRE
+                    elif ne.event_type == "Earthquake": d_type = DisasterType.EARTHQUAKE
+
+                    new_disaster = Disaster(
+                        title=ne.title,
+                        disaster_type=d_type,
+                        severity=SeverityLevel(ne.severity_mapped),
+                        status=DisasterStatus.ACTIVE,
+                        latitude=ne.latitude,
+                        longitude=ne.longitude,
+                        country="USA",
+                        affected_population=ne.affected_population or 25000,
+                        confidence_score=0.95,
+                        source=ne.source,
+                        source_type=SourceType.NWS,
+                        source_url=ne.source_url,
+                        verification_status=VerificationStatus.VERIFIED
+                    )
+                    db.add(new_disaster)
+                    synced_count += 1
+        except Exception as nws_err:
+            logger.warning(f"NWS sync error: {nws_err}")
+
+        # 2. Fetch from GDACS
         gdacs_res = get_active_disasters(limit=50)
         gdacs_events = gdacs_res.events
         
-        # 2. Fetch from USGS
+        # 3. Fetch from USGS
         usgs_res = get_recent_earthquakes(limit=50)
         usgs_events = usgs_res.events
-        
-        synced_count = 0
         
         # Helper to map GDACS event type to DB DisasterType
         def map_gdacs_type(code: str) -> DisasterType:
@@ -476,18 +559,24 @@ def sync_disasters_endpoint(db: Session = Depends(get_db)):
                 return DisasterType.EARTHQUAKE
             elif code_upper == "WF":
                 return DisasterType.WILDFIRE
-            # fallbacks
             return DisasterType.FLOOD
 
         # Process GDACS
         for e in gdacs_events:
-            # Check if already exists in DB by title or source_url
             existing = db.query(Disaster).filter(
                 (Disaster.title == e.title) | 
                 ((Disaster.source_url == e.url) & (e.url is not None))
             ).first()
             
             if not existing:
+                country_label = "Global"
+                if "united states" in (e.country or "").lower() or (e.longitude and e.longitude < -50 and e.latitude and e.latitude > 15):
+                    country_label = "USA"
+                elif "india" in (e.country or "").lower() or (e.latitude and 6 <= e.latitude <= 38 and e.longitude and 68 <= e.longitude <= 98):
+                    country_label = "India"
+                elif e.country:
+                    country_label = e.country
+
                 new_disaster = Disaster(
                     title=e.title,
                     disaster_type=map_gdacs_type(e.event_type),
@@ -495,6 +584,7 @@ def sync_disasters_endpoint(db: Session = Depends(get_db)):
                     status=DisasterStatus.ACTIVE,
                     latitude=e.latitude if e.latitude is not None else 0.0,
                     longitude=e.longitude if e.longitude is not None else 0.0,
+                    country=country_label,
                     affected_population=e.affected_population or 50000,
                     confidence_score=e.alert_score / 5.0 if e.alert_score is not None else 0.5,
                     source=f"GDACS {e.event_id}",
@@ -515,6 +605,15 @@ def sync_disasters_endpoint(db: Session = Depends(get_db)):
             ).first()
             
             if not existing:
+                place_l = (e.place or "").lower()
+                c_label = "Global"
+                if any(st in place_l for st in ["california", "alaska", "hawaii", "nevada", "texas", "oregon", "washington", "oklahoma", "ca", "ak", "hi", "nv"]):
+                    c_label = "USA"
+                elif (e.longitude and e.longitude < -50 and e.latitude and e.latitude > 15):
+                    c_label = "USA"
+                elif "india" in place_l or (e.latitude and 6 <= e.latitude <= 38 and e.longitude and 68 <= e.longitude <= 98):
+                    c_label = "India"
+
                 new_disaster = Disaster(
                     title=f"Earthquake: {e.place}",
                     disaster_type=DisasterType.EARTHQUAKE,
@@ -522,6 +621,7 @@ def sync_disasters_endpoint(db: Session = Depends(get_db)):
                     status=DisasterStatus.ACTIVE,
                     latitude=e.latitude,
                     longitude=e.longitude,
+                    country=c_label,
                     affected_population=e.felt_reports or 1000,
                     confidence_score=0.9,
                     source=f"USGS {e.usgs_id}",
@@ -738,26 +838,46 @@ def create_verification_log(payload: VerificationLogCreate, db: Session = Depend
 def get_allocations(
     disaster_id: Optional[uuid.UUID] = Query(None),
     status: Optional[AllocationStatus] = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
     """
-    Get resource allocation records.
-    Used by: allocation_agent.py, command_center dashboard.
+    Get resource allocation records enriched with incident, contact, and verification telemetry.
     """
     query = db.query(ResourceAllocation)
     if disaster_id:
         query = query.filter(ResourceAllocation.disaster_id == disaster_id)
     if status:
         query = query.filter(ResourceAllocation.status == status)
-    return query.order_by(ResourceAllocation.allocated_at.desc()).limit(limit).all()
+    
+    allocations = query.order_by(ResourceAllocation.allocated_at.desc()).limit(limit).all()
+    results = []
+
+    for a in allocations:
+        resp = AllocationResponse.model_validate(a)
+        if a.disaster:
+            resp.disaster_title = a.disaster.title
+            resp.disaster_type = a.disaster.disaster_type.value
+            resp.disaster_severity = a.disaster.severity.value
+            resp.disaster_country = getattr(a.disaster, "country", "India")
+        if a.resource:
+            resp.resource_name = a.resource.resource_name
+            resp.resource_type = a.resource.resource_type.value
+            resp.resource_model = getattr(a.resource, "model_spec", None) or a.resource.resource_name
+            if not resp.contact_name:
+                resp.contact_name = getattr(a.resource, "contact_name", None)
+            if not resp.contact_phone:
+                resp.contact_phone = getattr(a.resource, "contact_phone", None)
+        results.append(resp)
+
+    return results
 
 
 @app.post("/api/allocations", response_model=AllocationResponse, status_code=201, tags=["Allocations"])
 def create_allocation(payload: AllocationCreate, db: Session = Depends(get_db)):
     """
     Create a resource allocation record.
-    Called by: allocation_agent.py when deploying resources to a disaster.
+    Initial status is PENDING_APPROVAL unless explicitly specified.
     """
     # Validate disaster and resource exist
     disaster = db.query(Disaster).filter(Disaster.id == payload.disaster_id).first()
@@ -768,20 +888,95 @@ def create_allocation(payload: AllocationCreate, db: Session = Depends(get_db)):
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
 
-    allocation = ResourceAllocation(**payload.model_dump())
+    alloc_data = payload.model_dump()
+    if not alloc_data.get("contact_name"):
+        alloc_data["contact_name"] = resource.contact_name
+    if not alloc_data.get("contact_phone"):
+        alloc_data["contact_phone"] = resource.contact_phone
+
+    allocation = ResourceAllocation(**alloc_data)
     db.add(allocation)
+
+    # If dispatched or reached immediately, update resource status
+    if allocation.status in [AllocationStatus.DISPATCHED, AllocationStatus.ACTIVE, AllocationStatus.REACHED]:
+        resource.status = ResourceStatus.BUSY
+
     db.commit()
     db.refresh(allocation)
-    logger.info(f"🚁 Resource allocated: {resource.resource_name} → Disaster {disaster.title}")
-    return allocation
+    logger.info(f"🚁 Resource allocated: {resource.resource_name} → Disaster {disaster.title} [Status: {allocation.status.value}]")
+
+    resp = AllocationResponse.model_validate(allocation)
+    resp.disaster_title = disaster.title
+    resp.disaster_type = disaster.disaster_type.value
+    resp.disaster_severity = disaster.severity.value
+    resp.disaster_country = getattr(disaster, "country", "India")
+    resp.resource_name = resource.resource_name
+    resp.resource_type = resource.resource_type.value
+    resp.resource_model = getattr(resource, "model_spec", None)
+    return resp
+
+
+@app.patch("/api/allocations/{allocation_id}/verify", response_model=AllocationResponse, tags=["Allocations"])
+def verify_allocation_endpoint(
+    allocation_id: uuid.UUID,
+    payload: AllocationVerifyRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Human verification endpoint:
+    - Approve & Dispatch (PENDING_APPROVAL -> DISPATCHED)
+    - Confirm Reached (REACHED)
+    - Report Field Issue (ISSUE_REPORTED with issue_description & notes)
+    - Complete Mission (COMPLETED -> frees resource back to AVAILABLE)
+    """
+    from datetime import timezone
+    allocation = db.query(ResourceAllocation).filter(ResourceAllocation.id == allocation_id).first()
+    if not allocation:
+        raise HTTPException(status_code=404, detail="Resource allocation not found")
+
+    allocation.status = payload.status
+    allocation.human_verified_by = payload.human_verified_by or "Command_Duty_Officer"
+    allocation.human_verified_at = datetime.now(timezone.utc)
+
+    if payload.field_status_notes:
+        allocation.field_status_notes = payload.field_status_notes
+    if payload.issue_description:
+        allocation.issue_description = payload.issue_description
+
+    resource = db.query(Resource).filter(Resource.id == allocation.resource_id).first()
+    if resource:
+        if payload.status in [AllocationStatus.DISPATCHED, AllocationStatus.EN_ROUTE, AllocationStatus.REACHED]:
+            resource.status = ResourceStatus.BUSY
+        elif payload.status in [AllocationStatus.COMPLETED, AllocationStatus.CANCELLED]:
+            resource.status = ResourceStatus.AVAILABLE
+            allocation.completed_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(allocation)
+    logger.info(f"✅ Human verification recorded for Allocation [{allocation.id}]: Status={allocation.status.value}")
+
+    disaster = db.query(Disaster).filter(Disaster.id == allocation.disaster_id).first()
+    resp = AllocationResponse.model_validate(allocation)
+    if disaster:
+        resp.disaster_title = disaster.title
+        resp.disaster_type = disaster.disaster_type.value
+        resp.disaster_severity = disaster.severity.value
+        resp.disaster_country = getattr(disaster, "country", "India")
+    if resource:
+        resp.resource_name = resource.resource_name
+        resp.resource_type = resource.resource_type.value
+        resp.resource_model = getattr(resource, "model_spec", None)
+    return resp
 
 
 @app.get("/api/allocations/recommend", tags=["Allocations"])
 def recommend_allocation(disaster_id: uuid.UUID, db: Session = Depends(get_db)):
     """
     Computes an AI-driven allocation recommendation for a selected disaster.
-    Finds the closest available resource that matches the required resource type
-    according to disaster type and severity rules, and generates a routing path and detailed reasoning.
+    Enforces domain rules:
+      - Cyclone/Hurricane: strictly NO boats/lifeboats! (Allocates Evacuation Teams, Robots, Ambulances)
+      - Proximity: matches regional reserves (USA vs India) and computes closest Haversine distance,
+        transit ETA, designated highway corridor, and assigned personnel contact.
     """
     disaster = db.query(Disaster).filter(Disaster.id == disaster_id).first()
     if not disaster:
@@ -791,31 +986,63 @@ def recommend_allocation(disaster_id: uuid.UUID, db: Session = Depends(get_db)):
     severity = disaster.severity.value
     
     from agents.allocation_agent import ALLOCATION_RULES
-    needs = ALLOCATION_RULES.get(dis_type, {}).get(severity, {})
+    needs = dict(ALLOCATION_RULES.get(dis_type, {}).get(severity, {}))
     
+    # Strict rule requested by user: In Cyclone, NEVER allocate lifeboat/boat!
+    if dis_type == "Cyclone":
+        needs.pop("Boat", None)
+        if not needs:
+            needs = {"Evacuation Team": 1, "Robot": 1, "Ambulance": 1}
+
     if not needs:
-        needs = {"Ambulance": 1} if dis_type == "Earthquake" else {"Boat": 1}
+        if dis_type == "Earthquake": needs = {"Robot": 1, "Ambulance": 1}
+        elif dis_type == "Wildfire": needs = {"Robot": 1, "Evacuation Team": 1}
+        elif dis_type == "Flood": needs = {"Boat": 1, "Ambulance": 1}
+        else: needs = {"Ambulance": 1}
 
     req_res_name = list(needs.keys())[0]
     req_qty = needs[req_res_name]
     
     from database.models import ResourceType, ResourceStatus
-    r_type_val = ResourceType.BOAT
-    if req_res_name == "Ambulance": r_type_val = ResourceType.AMBULANCE
-    elif req_res_name == "Medical Team": r_type_val = ResourceType.MEDICAL_TEAM
-    elif req_res_name == "Rescue Team": r_type_val = ResourceType.RESCUE_TEAM
-    elif req_res_name == "NDRF Unit": r_type_val = ResourceType.NDRF_UNIT
-    elif req_res_name == "Helicopter": r_type_val = ResourceType.HELICOPTER
-    elif req_res_name == "Food Truck": r_type_val = ResourceType.FOOD_TRUCK
+    type_map = {
+        "Boat": ResourceType.BOAT,
+        "Ambulance": ResourceType.AMBULANCE,
+        "Medical Team": ResourceType.MEDICAL_TEAM,
+        "Rescue Team": ResourceType.RESCUE_TEAM,
+        "NDRF Unit": ResourceType.NDRF_UNIT,
+        "Helicopter": ResourceType.HELICOPTER,
+        "Food Truck": ResourceType.FOOD_TRUCK,
+        "Robot": ResourceType.ROBOT,
+        "Evacuation Team": ResourceType.EVACUATION_TEAM,
+    }
+    r_type_val = type_map.get(req_res_name, ResourceType.AMBULANCE)
 
-    available_resources = db.query(Resource).filter(
+    # Determine region of the disaster
+    disaster_country = getattr(disaster, "country", "India")
+    is_usa = (disaster_country == "USA") or (disaster.longitude is not None and disaster.longitude < -50)
+
+    # Filter resources by type and regional proximity
+    query = db.query(Resource).filter(
         Resource.resource_type == r_type_val,
         Resource.status == ResourceStatus.AVAILABLE,
         Resource.quantity > 0
-    ).all()
+    )
+
+    if is_usa:
+        regional_pool = query.filter(Resource.country == "USA").all()
+        available_resources = regional_pool if regional_pool else query.all()
+    else:
+        regional_pool = query.filter(Resource.country == "India").all()
+        available_resources = regional_pool if regional_pool else query.all()
     
     if not available_resources:
-        raise HTTPException(status_code=404, detail=f"No available {req_res_name} resources in stock.")
+        # Fallback to any available resource in stock
+        available_resources = db.query(Resource).filter(
+            Resource.status == ResourceStatus.AVAILABLE,
+            Resource.quantity > 0
+        ).all()
+        if not available_resources:
+            raise HTTPException(status_code=404, detail=f"No available {req_res_name} resources in stock.")
 
     from services.simulation_engine import _haversine_km
     closest_res = None
@@ -830,35 +1057,55 @@ def recommend_allocation(disaster_id: uuid.UUID, db: Session = Depends(get_db)):
                 
     if not closest_res:
         closest_res = available_resources[0]
-        min_dist = 150.0
-        
-    route_name = "National Highway Corridor"
-    if min_dist < 200:
-        if "mumbai" in disaster.title.lower() or "pune" in disaster.title.lower():
-            route_name = "Mumbai-Pune Expressway / NH-48"
-        elif "delhi" in disaster.title.lower() or "rishikesh" in disaster.title.lower():
-            route_name = "NH-334 / Haridwar-Rishikesh Highway"
+        min_dist = 45.0
+
+    # Route Name assignment based on location
+    dis_title_l = disaster.title.lower()
+    if is_usa:
+        if "california" in dis_title_l or "los angeles" in dis_title_l or "canyon" in dis_title_l:
+            route_name = "US-101 North / Topanga Canyon Corridor"
+        elif "florida" in dis_title_l or "tampa" in dis_title_l or "milton" in dis_title_l:
+            route_name = "I-275 North / Howard Frankland Bridge Corridor"
+        elif "texas" in dis_title_l or "houston" in dis_title_l:
+            route_name = "I-10 / I-45 Houston Gulf Corridor"
+        elif "alaska" in dis_title_l or "anchorage" in dis_title_l:
+            route_name = "AK-1 / Seward Highway Corridor"
         else:
-            route_name = "State Highway / Route NH-48"
-    elif min_dist >= 500:
-        if "guwahati" in disaster.title.lower() or "kolkata" in disaster.title.lower() or "assam" in disaster.title.lower():
+            route_name = "Interstate Highway Corridor (US DOT)"
+    else:
+        if "mumbai" in dis_title_l or "pune" in dis_title_l:
+            route_name = "Mumbai-Pune Expressway / NH-48"
+        elif "delhi" in dis_title_l or "rishikesh" in dis_title_l:
+            route_name = "NH-334 / Haridwar-Rishikesh Highway"
+        elif "assam" in dis_title_l or "kolkata" in dis_title_l:
             route_name = "NH-27 (East-West Corridor)"
         else:
-            route_name = "National Highway NH-27 Corridor"
-            
+            route_name = "National Highway Corridor NH-48"
+
+    # ETA Calculation
+    transit_speed = 70.0 if closest_res.resource_type == ResourceType.ROBOT else 60.0
+    eta_mins = max(5, int((min_dist / transit_speed) * 60))
+
     ai_reason = (
-        f"AI Autonomous Dispatch Suggestion: Identified '{closest_res.resource_name}' "
-        f"as the optimal responder based on proximity ({min_dist:.1f} km away). "
-        f"Route: Dispatch via {route_name}. Allocation reason: "
-        f"{disaster.title} ({severity} {dis_type}) requires active emergency relief resources. "
-        f"Deploying {req_qty} unit(s) of {req_res_name} to stabilize the incident site."
+        f"AI Allocation Recommendation: Selected '{closest_res.resource_name}' "
+        f"({closest_res.model_spec or closest_res.resource_type.value}) stationed {min_dist:.1f} km away. "
+        f"{'Strict domain safety protocol: boats prohibited during cyclone winds; heavy tactical units dispatched instead. ' if dis_type == 'Cyclone' else ''}"
+        f"Route: {route_name} (ETA ~{eta_mins} mins). Responder In-Charge: {closest_res.contact_name or 'Command Ops'} "
+        f"(Phone: {closest_res.contact_phone or 'Direct Radio Link'})."
     )
     
     return {
         "resource_id": str(closest_res.id),
         "resource_name": closest_res.resource_name,
+        "resource_type": closest_res.resource_type.value,
+        "model_spec": closest_res.model_spec or closest_res.resource_name,
+        "contact_name": closest_res.contact_name or "Command Duty Officer",
+        "contact_phone": closest_res.contact_phone or "N/A",
+        "capabilities": closest_res.capabilities or "Standard Deployment",
         "quantity": min(req_qty, closest_res.quantity),
         "distance_km": round(min_dist, 1),
+        "distance_miles": round(min_dist * 0.621371, 1),
+        "eta_minutes": eta_mins,
         "route_name": route_name,
         "recommendation_reason": ai_reason
     }

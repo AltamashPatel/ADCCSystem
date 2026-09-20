@@ -276,8 +276,101 @@ Follow these steps to run both the backend FastAPI server and the React frontend
 * **Disaster Map**: View real-time USGS earthquake and weather alert coordinates mapped geographically, featuring optimal evacuation trails.
 * **Simulations**: Test scenario modifications (e.g. increase rainfall parameter by 50% or raise wind levels) and run Digital Twin forecasting simulations.
 
-----
+---
+
+## 🔍 Verifying the System (How to Check it's Working)
+
+You can verify that the frontend, backend, and agentic workflows are operating correctly using these testing mechanisms:
+
+### 1. Standalone Backend Agentic Run (No UI Needed)
+Verify the LangGraph execution, database integration, and Google Gemini connection via CLI:
+```bash
+cd disaster-ai
+# On Windows (PowerShell)
+$env:PYTHONPATH="."; python workflows/graph.py
+
+# On macOS/Linux
+PYTHONPATH=. python workflows/graph.py
+```
+* **Expected Result**: The console will run a standalone simulation for a "Guwahati Flood Zone" case, outputting a complete supervisor iteration log and JSON results containing severity assessments, allocated resource IDs, and AI recommendations.
+
+### 2. Verify FastAPI Endpoints & Health Check
+* **Health API**: Visit `http://localhost:8000/health` in your browser.
+  - **Expected JSON**:
+    ```json
+    {
+      "status": "healthy",
+      "database": "connected",
+      "stats": {
+        "disasters": 4,
+        "resources": 12
+      }
+    }
+    ```
+* **Swagger API UI**: Visit `http://localhost:8000/docs`. You can manually invoke endpoints (like `POST /api/disasters` or `GET /api/allocations`) directly from the browser to inspect live database values.
+
+### 3. Run a Live Agent Flow via React UI
+1. Navigate to the **AI Command Center** page (`http://localhost:5173/command-center`).
+2. Input target coordinates or click one of the quick start scenario templates.
+3. Click the **Run Agentic Simulation** button.
+4. Watch the live **LangGraph Trace panel** dynamically light up node by node (e.g., `collect_data` ➔ `verification` ➔ `severity` ➔ parallel `allocation` & `shelter` ➔ `command_center`) as the agents cooperate.
+
+---
+
 ## 📌 MVP Status & Future Enhancements
 
 > [!IMPORTANT]
 > **MVP Status Note**: This system is currently built as a **Minimum Viable Product (MVP)**. It establishes the foundational multi-agent routing architecture (using LangGraph), demonstrates real-world API integrations (Weather, GDACS, USGS, Twilio), and simulates resource allocation strategies. The final, production-ready product will feature much deeper capabilities and robust systems.
+
+### 🔮 Future Enhancements
+* **Real-time IoT Sensor Feeds**: Replace periodic API sweeps with direct WebSocket pipelines streaming real-time data from river water-level sensors, rain gauges, and seismic trackers.
+* **Computer Vision Satellite Mapping**: Integrate vision models (e.g., Gemini Pro Vision) to automatically scan Sentinel-2 satellite images and output precise flood outline contours and structural damage maps.
+* **GIS Evacuation Routing & Road Obstacles**: Integrate with live maps telemetry data (like Waze or local road authorities) to dynamically update route options if bridges collapse or lanes flood during a crisis.
+* **Voice-Activated Dispatch & Citizen Intake**: Support automated hotlines that record spoken distress calls, transcribe them via Speech-to-Text, and feed them directly into the Data Collection Agent for verification.
+* **Operational Offline/Resilient Mode**: Implement fallback caching layers and sync capabilities so emergency field workers can log data offline using light SQLite local stores when cell tower networks go down.
+
+---
+
+## 🔒 API Key Consumption & Cost Prevention (Public Hosting Guide)
+
+When hosting this application on public servers (e.g., Vercel, Render, AWS, Heroku) for public showcase, leaving your personal API keys (like Google Gemini, Twilio, NewsAPI, Sentinel Hub) in the backend `.env` variables runs the risk of **credit exhaustion, unexpected billing, or rate-limiting** due to automated bots or high user traffic. 
+
+Here are the standard solutions implemented in ADCC to safeguard your keys, alongside recommendations for public hosting:
+
+### 1. "Bring Your Own Key" (BYOK) Pass-Through (Recommended)
+Rather than executing agent calls via the host's server-side key, configure the system to let users input their own API keys:
+* **How it works**:
+  1. The user navigates to the **Settings** page (`http://localhost:5173/settings`) and inputs their personal Gemini key (`GOOGLE_API_KEY`) and other credentials.
+  2. The React frontend saves these keys securely inside the client's browser local storage (`localStorage.setItem('gemini_api_key', key)`).
+  3. The Axios client wrapper ([api.ts](file:///c:/Projects/python%20projects/mudassir/ADCCSystem/src/services/api.ts)) intercepts requests and attaches these values as headers:
+     ```typescript
+     // Example HTTP Request Headers
+     headers: {
+       'X-Gemini-API-Key': localStorage.getItem('gemini_api_key') || '',
+       'X-ORS-API-Key': localStorage.getItem('ors_api_key') || ''
+     }
+     ```
+  4. The FastAPI backend reads these headers at endpoint execution. If present, it overrides the default `.env` variables for that specific request session. If missing, it prompts the user to enter a key.
+
+### 2. Sandbox / Demo Mode Toggle
+* **Backend Env Toggle**: You can set `DEMO_MODE=true` in the backend environment.
+* **Mechanism**: In Demo Mode, the orchestration node wrappers in the backend bypass external LLM/Twilio API dispatches entirely. Instead of making live Gemini requests, it routes through static, cached scenario structures (e.g., the mock paths generated by `services/demo_helper.py`). This allows anyone to click around the dashboard and review agent nodes free of charge.
+
+### 3. Server-Side Rate Limiting (Throttling)
+* If you do decide to provide a limited, public "free tier" using your server keys, protect the backend from abuse using rate-limiting middleware:
+  - Install `slowapi` on the FastAPI backend:
+    ```bash
+    pip install slowapi
+    ```
+  - Limit the `/api/orchestration/run` and chat endpoint to a strict threshold:
+    ```python
+    @app.post("/api/orchestration/run")
+    @limiter.limit("5/hour")  # Max 5 simulations per IP per hour
+    async def run_orchestration(request: Request):
+        ...
+    ```
+
+### 4. External Data Source Caching
+* External data sweeps (Weather feeds from Open-Meteo, USGS earthquakes, GDACS alerts) are cached in the PostgreSQL database for **1–2 hours** inside the `ApiSyncLog` and `Disaster` models.
+* Subsequent coordination runs in nearby coordinates look up the cached database records first, avoiding repeated billable hits to news or satellite APIs.
+

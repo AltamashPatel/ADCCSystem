@@ -17,6 +17,7 @@ import SectionHeader from '../components/SectionHeader';
 import StatCard from '../components/StatCard';
 import SystemHealth from '../components/SystemHealth';
 import LiveAlertsPanel from '../components/LiveAlertsPanel';
+import HumanVerificationTable from '../components/HumanVerificationTable';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -100,8 +101,8 @@ export const Dashboard: React.FC = () => {
   const avgConfidence = getAverageConfidence();
 
   // 3. Map charts data from DB fields
-  const resourceChartData = ['Boat', 'Ambulance', 'Medical_Team', 'Rescue_Team', 'NDRF_Unit'].map(type => {
-    const typeResources = resources.filter(r => r.resource_type === type);
+  const resourceChartData = ['Robot', 'Ambulance', 'Evacuation_Team', 'Boat', 'Medical_Team', 'NDRF_Unit'].map(type => {
+    const typeResources = resources.filter(r => r.resource_type === type || r.resource_type.toLowerCase() === type.toLowerCase());
     const available = typeResources.filter(r => r.status === 'Available').reduce((sum, r) => sum + r.quantity, 0);
     const busy = typeResources.filter(r => r.status === 'Busy').reduce((sum, r) => sum + r.quantity, 0);
     return {
@@ -410,7 +411,7 @@ export const Dashboard: React.FC = () => {
               { label: 'GIS Ingestion Server',  value: '99.98% UPTIME',    color: 'text-adcc-success' },
               { label: 'Heartbeat Frequency',   value: '1.0s (POLLING)',   color: 'text-adcc-accent'  },
               { label: 'Satellite Latency',     value: '480ms (SAT-NET)',  color: 'text-adcc-warning' },
-              { label: 'Primary Data Center',   value: 'MUMBAI-CENTRAL',  color: 'text-adcc-success' },
+              { label: 'Primary Data Center',   value: 'MUMBAI / US-EAST', color: 'text-adcc-success' },
             ].map(({ label, value, color }) => (
               <div key={label} className="flex justify-between items-center bg-adcc-surface2/60 border border-adcc-border px-3 py-2.5 rounded-xl">
                 <span className="text-adcc-textMuted uppercase text-[10px]">{label}</span>
@@ -420,6 +421,16 @@ export const Dashboard: React.FC = () => {
           </div>
         </motion.div>
       </div>
+
+      {/* Real-World Operational Verification & Responder Telemetry Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35, duration: 0.4 }}
+        className="mb-8"
+      >
+        <HumanVerificationTable />
+      </motion.div>
 
       {/* Floating HUD Command Action Dock */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-adcc-surface/90 backdrop-blur-xl border border-adcc-accentBorder px-4 py-3 rounded-2xl z-[1000] flex flex-col md:flex-row items-center gap-4 shadow-elevated w-[90%] max-w-[660px]">

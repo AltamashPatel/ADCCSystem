@@ -35,21 +35,41 @@ AGENT_NAME = "allocation_agent"
 ALLOCATION_RULES: dict[str, dict[str, dict[str, int]]] = {
     "Flood": {
         "Low":      {"Boat": 1},
-        "Medium":   {"Boat": 2, "Ambulance": 1},
-        "High":     {"Boat": 3, "Ambulance": 2, "Medical Team": 1},
-        "Critical": {"Boat": 5, "Ambulance": 3, "Medical Team": 2, "NDRF Unit": 1},
+        "Medium":   {"Boat": 2, "Ambulance": 1, "Robot": 1},
+        "High":     {"Boat": 3, "Ambulance": 2, "Medical Team": 1, "Robot": 1, "Evacuation Team": 1},
+        "Critical": {"Boat": 5, "Ambulance": 3, "Medical Team": 2, "Robot": 2, "Evacuation Team": 2, "NDRF Unit": 1},
     },
     "Earthquake": {
-        "Low":      {},
-        "Medium":   {"Ambulance": 2},
-        "High":     {"Ambulance": 3, "Medical Team": 2},
-        "Critical": {"Ambulance": 4, "Medical Team": 3, "Rescue Team": 2, "NDRF Unit": 1},
+        "Low":      {"Robot": 1},
+        "Medium":   {"Ambulance": 2, "Robot": 1},
+        "High":     {"Ambulance": 3, "Robot": 2, "Medical Team": 2},
+        "Critical": {"Ambulance": 4, "Robot": 3, "Medical Team": 3, "Rescue Team": 2, "NDRF Unit": 1},
     },
     "Cyclone": {
-        "Low":      {},
-        "Medium":   {},
-        "High":     {"Boat": 2, "Ambulance": 2, "NDRF Unit": 1},
-        "Critical": {"Boat": 4, "Ambulance": 3, "NDRF Unit": 2},
+        # Strict rule: NO lifeboats/boats allocated for cyclones due to high-wind capsizing hazards.
+        # Instead, deploy Evacuation Teams, Drones/Robots, Ambulances, and Heavy Rescue.
+        "Low":      {"Ambulance": 1, "Robot": 1},
+        "Medium":   {"Evacuation Team": 1, "Ambulance": 2, "Robot": 1},
+        "High":     {"Evacuation Team": 2, "Ambulance": 2, "Robot": 2, "NDRF Unit": 1},
+        "Critical": {"Evacuation Team": 4, "Ambulance": 4, "Robot": 3, "NDRF Unit": 2},
+    },
+    "Wildfire": {
+        "Low":      {"Robot": 1},
+        "Medium":   {"Robot": 2, "Ambulance": 1, "Evacuation Team": 1},
+        "High":     {"Robot": 3, "Ambulance": 2, "Evacuation Team": 2, "Medical Team": 1},
+        "Critical": {"Robot": 5, "Ambulance": 4, "Evacuation Team": 3, "Medical Team": 2},
+    },
+    "Heatwave": {
+        "Low":      {"Ambulance": 1},
+        "Medium":   {"Ambulance": 2, "Medical Team": 1},
+        "High":     {"Ambulance": 3, "Medical Team": 2, "Food Truck": 1},
+        "Critical": {"Ambulance": 4, "Medical Team": 3, "Food Truck": 2},
+    },
+    "Landslide": {
+        "Low":      {"Robot": 1},
+        "Medium":   {"Robot": 1, "Ambulance": 2, "Rescue Team": 1},
+        "High":     {"Robot": 2, "Ambulance": 3, "Rescue Team": 2, "Evacuation Team": 1},
+        "Critical": {"Robot": 3, "Ambulance": 4, "Rescue Team": 3, "Evacuation Team": 2, "NDRF Unit": 1},
     }
 }
 
@@ -66,10 +86,16 @@ def analyze_disaster_type(disaster_title: str) -> str:
     title_lower = disaster_title.lower()
     if "flood" in title_lower or "rain" in title_lower or "waterlogging" in title_lower:
         return "Flood"
-    elif "cyclone" in title_lower or "storm" in title_lower or "hurricane" in title_lower:
+    elif "cyclone" in title_lower or "storm" in title_lower or "hurricane" in title_lower or "tornado" in title_lower or "typhoon" in title_lower:
         return "Cyclone"
     elif "earthquake" in title_lower or "seismic" in title_lower or "quake" in title_lower:
         return "Earthquake"
+    elif "wildfire" in title_lower or "fire" in title_lower:
+        return "Wildfire"
+    elif "heat" in title_lower or "heatwave" in title_lower:
+        return "Heatwave"
+    elif "landslide" in title_lower or "mudslide" in title_lower:
+        return "Landslide"
     
     logger.warning(f"[AllocationAgent] Could not determine disaster type from title: '{disaster_title}'. Defaulting to 'Flood'.")
     return "Flood"

@@ -98,6 +98,8 @@ class ResourceType(str, enum.Enum):
     HELICOPTER = "Helicopter"
     FOOD_TRUCK = "Food Truck"
     NDRF_UNIT = "NDRF Unit"
+    ROBOT = "Robot"
+    EVACUATION_TEAM = "Evacuation Team"
 
 
 class ResourceStatus(str, enum.Enum):
@@ -110,10 +112,11 @@ class ResourceStatus(str, enum.Enum):
 class SourceType(str, enum.Enum):
     """
     Identifies which external API or system provided the data.
-    Used by gdacs_tool.py, weather_tool.py, disaster_tool.py, news_tool.py.
+    Used by gdacs_tool.py, weather_tool.py, disaster_tool.py, news_tool.py, nws_tool.py.
     """
     GDACS = "GDACS"
     USGS = "USGS"
+    NWS = "NWS"
     OPENMETEO = "OpenMeteo"
     NEWSAPI = "NewsAPI"
     NASA = "NASA"
@@ -149,7 +152,12 @@ class SyncStatus(str, enum.Enum):
 
 
 class AllocationStatus(str, enum.Enum):
-    """Lifecycle of a resource allocation managed by allocation_agent.py."""
+    """Lifecycle of a resource allocation managed by allocation_agent.py and human verifiers."""
+    PENDING_APPROVAL = "Pending Approval"
+    DISPATCHED = "Dispatched"
+    EN_ROUTE = "En Route"
+    REACHED = "Reached"
+    ISSUE_REPORTED = "Issue Reported"
     ACTIVE = "Active"
     COMPLETED = "Completed"
     CANCELLED = "Cancelled"
@@ -211,6 +219,10 @@ class Disaster(Base):
     )
     longitude: Mapped[float] = mapped_column(
         Float, nullable=False, comment="Epicenter or impact zone longitude (WGS84)"
+    )
+    country: Mapped[str] = mapped_column(
+        String(50), default="India", nullable=False,
+        comment="Country of incident: 'USA', 'India', etc."
     )
 
     # ── Impact Metrics ───────────────────────────────────────────────────────
@@ -312,6 +324,28 @@ class Resource(Base):
     # Geolocation — for route_tool.py distance calculations
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    country: Mapped[str] = mapped_column(
+        String(50), default="India", nullable=False,
+        comment="Stationed country: 'USA', 'India'"
+    )
+
+    # Operational Metadata & Responder Contact
+    contact_name: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True,
+        comment="Officer or operator in-charge, e.g. 'Capt. Derek Miller'"
+    )
+    contact_phone: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True,
+        comment="Direct phone contact, e.g. '+1 (213) 555-0192'"
+    )
+    model_spec: Mapped[Optional[str]] = mapped_column(
+        String(150), nullable=True,
+        comment="Specific hardware/robot model, e.g. 'Boston Dynamics Spot Enterprise'"
+    )
+    capabilities: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True,
+        comment="Key operational capabilities, e.g. 'FLIR Thermal, 2500 GPM Foam Cannon'"
+    )
 
     last_updated: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(),
@@ -665,8 +699,43 @@ class ResourceAllocation(Base):
     )
     status: Mapped[AllocationStatus] = mapped_column(
         SAEnum(AllocationStatus, name="allocationstatus", create_type=True),
-        default=AllocationStatus.ACTIVE, nullable=False
+        default=AllocationStatus.PENDING_APPROVAL, nullable=False,
+        comment="Verification & dispatch lifecycle"
     )
+
+    # Dynamic Telemetry & Transit Info
+    distance_km: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True, comment="Calculated distance from depot to incident site"
+    )
+    eta_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="Estimated arrival time in minutes"
+    )
+    route_name: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="Designated deployment route/expressway"
+    )
+
+    # Informed Responders Contact Info
+    contact_name: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, comment="Field commander / operator contact name"
+    )
+    contact_phone: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, comment="Field commander / operator phone number"
+    )
+
+    # Human Verification & Field Check
+    human_verified_by: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, comment="Callsign or user who performed human verification"
+    )
+    human_verified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="Timestamp of human verification"
+    )
+    field_status_notes: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="Field notes from responder or operator"
+    )
+    issue_description: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="Incident details if roadblock or issue reported"
+    )
+
     allocated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

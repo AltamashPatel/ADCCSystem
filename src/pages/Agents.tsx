@@ -13,12 +13,12 @@ interface AgentStatusDetails {
 }
 
 export const Agents: React.FC = () => {
-  const [selectedAgentId, setSelectedAgentId] = useState('a-supervisor');
-  const [commandText, setCommandText] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('a-supervisor');
+  const [commandText, setCommandText] = useState<string>('');
 
   const { data: syncLogs = [],   refetch: refetchSync  } = useQuery<BackendSyncLog[]>         ({ queryKey: ['syncLogs'],         queryFn: apiService.getSyncLogs         });
   const { data: verLogs = [],    refetch: refetchVer   } = useQuery<BackendVerificationLog[]>  ({ queryKey: ['verificationLogs'], queryFn: apiService.getVerificationLogs  });
-  const { data: allocations = [],refetch: refetchAlloc } = useQuery<BackendAllocation[]>       ({ queryKey: ['allocations'],      queryFn: apiService.getAllocations       });
+  const { data: allocations = [],refetch: refetchAlloc } = useQuery<BackendAllocation[]>       ({ queryKey: ['allocations'],      queryFn: () => apiService.getAllocations() });
   const { data: disasters = [],  refetch: refetchDis   } = useQuery<BackendDisaster[]>         ({ queryKey: ['disasters'],        queryFn: apiService.getDisasters         });
 
   const handleRefresh = () => { refetchSync(); refetchVer(); refetchAlloc(); refetchDis(); };
