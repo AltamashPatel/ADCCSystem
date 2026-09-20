@@ -1,66 +1,43 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { 
   ShieldAlert, 
-  MapPin, 
-  Activity, 
-  Boxes, 
-  BellRing,
-  FileDown,
-  ShieldCheck,
-  RefreshCw
+  Flame, 
+  Users, 
+  ShieldCheck, 
+  RefreshCw, 
+  FileDown, 
+  Search,
+  Filter,
+  Globe,
+  Radio
 } from 'lucide-react';
-import apiService from '../services/api';
+import apiService, { BackendDisaster } from '../services/api';
 import PageContainer from '../components/PageContainer';
-import SectionHeader from '../components/SectionHeader';
-import StatCard from '../components/StatCard';
-import SystemHealth from '../components/SystemHealth';
-import LiveAlertsPanel from '../components/LiveAlertsPanel';
-import HumanVerificationTable from '../components/HumanVerificationTable';
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  BarChart, 
-  Bar, 
-  Legend 
-} from 'recharts';
+import DisasterBentoCard from '../components/DisasterBentoCard';
+import IncidentDetailModal from '../components/IncidentDetailModal';
 
 export const Dashboard: React.FC = () => {
-  // 1. Fetch live data from FastAPI backend using React Query
-  const { data: disasters = [], isLoading: disastersLoading, refetch: refetchDisasters } = useQuery({
+  const [selectedDisaster, setSelectedDisaster] = useState<BackendDisaster | null>(null);
+  const [regionFilter, setRegionFilter] = useState<'all' | 'USA' | 'India'>('all');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // 1. Fetch live disaster data from FastAPI backend
+  const { 
+    data: disasters = [], 
+    isLoading: disastersLoading, 
+    refetch: refetchDisasters 
+  } = useQuery({
     queryKey: ['disasters'],
     queryFn: apiService.getDisasters
   });
 
-  const { data: resources = [], isLoading: resourcesLoading, refetch: refetchResources } = useQuery({
-    queryKey: ['resources'],
-    queryFn: apiService.getResources
-  });
-
-  const { data: alerts = [], isLoading: alertsLoading, refetch: refetchAlerts } = useQuery({
-    queryKey: ['alerts'],
-    queryFn: apiService.getAlerts
-  });
-
-  const { data: health, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
-    queryKey: ['health'],
-    queryFn: apiService.getHealth
-  });
-
-  // Sync Mutation to query GDACS & USGS on the backend
+  // 2. Sync Mutation to trigger live GDACS & NOAA NWS updates
   const syncMutation = useMutation({
     mutationFn: apiService.syncDisasters,
     onSuccess: () => {
       refetchDisasters();
-      refetchResources();
-      refetchAlerts();
-      refetchHealth();
     }
   });
 
@@ -68,404 +45,259 @@ export const Dashboard: React.FC = () => {
     syncMutation.mutate();
   };
 
-  const isRefreshLoading = disastersLoading || resourcesLoading || alertsLoading || healthLoading || syncMutation.isPending;
-
-  // 2. Compute dynamic stats
-  const activeDisasters = disasters.filter(d => d.status === 'Active');
-  const criticalDisasters = activeDisasters.filter(d => d.severity === 'Critical' || d.severity === 'High');
+  // 3. Compute High-Level Metrics
+  const activeDisasters = disasters.filter(d => d.status === 'Active' || !d.status);
+  const criticalDisasters = disasters.filter(d => d.severity === 'Critical' || d.severity === 'High');
   const verifiedReports = disasters.filter(d => d.verification_status === 'Verified');
-  
-  // Affected Population
-  const totalAffectedPop = activeDisasters.reduce((acc, curr) => acc + (curr.affected_population || 0), 0);
-  
-  // Resource Available
-  const totalQty = resources.reduce((acc, curr) => acc + curr.quantity, 0);
-  const availableQty = resources.filter(r => r.status === 'Available').reduce((acc, curr) => acc + curr.quantity, 0);
-  const resourcePercent = totalQty > 0 ? Math.round((availableQty / totalQty) * 100) : 0;
+  const totalAffectedPop = disasters.reduce((acc, curr) => acc + (curr.affected_population || 0), 0);
 
-  // Highest severity level in play
-  const getHighestSeverity = () => {
-    if (activeDisasters.some(d => d.severity === 'Critical')) return 'Critical';
-    if (activeDisasters.some(d => d.severity === 'High' || d.severity === 'Medium')) return 'High';
-    return 'Low';
-  };
-  const currentSeverityLevel = getHighestSeverity();
+  // 4. Region & Filter matching
+  const filteredDisasters = disasters.filter(d => {
+    // Region filter
+    const isUsa = d.country?.toUpperCase() === 'USA' || (d.longitude !== undefined && d.longitude < -30);
+    const isIndia = d.country?.toUpperCase() === 'INDIA' || (d.longitude !== undefined && d.longitude > 60 && d.longitude < 100);
 
-  // Average confidence score across verified events
-  const getAverageConfidence = () => {
-    const verifiedWithConf = verifiedReports.filter(d => d.confidence_score !== undefined);
-    if (verifiedWithConf.length === 0) return 0;
-    const totalConf = verifiedWithConf.reduce((sum, d) => sum + (d.confidence_score || 0), 0);
-    return Math.round((totalConf / verifiedWithConf.length) * 100);
-  };
-  const avgConfidence = getAverageConfidence();
+    let matchesRegion = true;
+    if (regionFilter === 'USA') matchesRegion = isUsa;
+    if (regionFilter === 'India') matchesRegion = isIndia;
 
-  // 3. Map charts data from DB fields
-  const resourceChartData = ['Robot', 'Ambulance', 'Evacuation_Team', 'Boat', 'Medical_Team', 'NDRF_Unit'].map(type => {
-    const typeResources = resources.filter(r => r.resource_type === type || r.resource_type.toLowerCase() === type.toLowerCase());
-    const available = typeResources.filter(r => r.status === 'Available').reduce((sum, r) => sum + r.quantity, 0);
-    const busy = typeResources.filter(r => r.status === 'Busy').reduce((sum, r) => sum + r.quantity, 0);
-    return {
-      name: type.replace('_', ' '),
-      Available: available,
-      Deployed: busy
-    };
+    // Severity filter
+    const matchesSeverity = severityFilter === 'all' || d.severity.toLowerCase() === severityFilter.toLowerCase();
+
+    // Search filter
+    const matchesSearch = searchQuery === '' || 
+      d.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      d.disaster_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (d.source && d.source.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return matchesRegion && matchesSeverity && matchesSearch;
   });
 
-  const trendData = [
-    { name: 'Jan', Cyclones: 1, Wildfires: 2, Floods: 2 },
-    { name: 'Feb', Cyclones: 0, Wildfires: 1, Floods: 3 },
-    { name: 'Mar', Cyclones: 2, Wildfires: 1, Floods: 4 },
-    { name: 'Apr', Cyclones: 1, Wildfires: 2, Floods: 5 },
-    { name: 'May', Cyclones: 2, Wildfires: 3, Floods: 6 },
-    { name: 'Jun', 
-      Cyclones: activeDisasters.filter(d=>d.disaster_type==='Cyclone').length, 
-      Wildfires: activeDisasters.filter(d=>d.disaster_type==='Wildfire').length, 
-      Floods: activeDisasters.filter(d=>d.disaster_type==='Flood').length 
-    }
-  ];
-
-  // Export report dummy handler
+  // 5. Export Report
   const handleExport = () => {
-    const csvContent = "data:text/csv;charset=utf-8,ADCC OPERATIONAL COMMAND REPORT - " + new Date().toISOString() + "\n" +
-      "Active Disasters," + activeDisasters.length + "\n" +
-      "Verified Reports," + verifiedReports.length + "\n" +
-      "Highest Severity Level," + currentSeverityLevel + "\n" +
-      "Affected Population," + totalAffectedPop + "\n" +
-      "Resource Available %," + resourcePercent + "\n";
+    const csvContent = "data:text/csv;charset=utf-8,ADCC DISASTER SITUATION REPORT - " + new Date().toISOString() + "\n" +
+      "Total Active Disasters," + activeDisasters.length + "\n" +
+      "Critical Severity Outbreaks," + criticalDisasters.length + "\n" +
+      "Verified Events," + verifiedReports.length + "\n" +
+      "Total Affected Population," + totalAffectedPop + "\n\n" +
+      "Title,Type,Severity,Country,Affected Population,Verification Status,Coordinates\n" +
+      disasters.map(d => `"${d.title}","${d.disaster_type}","${d.severity}","${d.country || 'N/A'}",${d.affected_population || 0},"${d.verification_status}","${d.latitude},${d.longitude}"`).join("\n");
+    
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `adcc_live_command_report_${Date.now()}.csv`);
+    link.setAttribute("download", `adcc_disaster_situation_report_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Layout Framer Motion animations
-  const containerVariants = {
-    hidden: {},
-    show: {
-      transition: {
-        staggerChildren: 0.03
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } }
-  };
-
-  const isDemoActive = activeDisasters.some(d => d.source === 'DEMO');
-
   return (
     <PageContainer>
-      {isDemoActive && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-adcc-warning/8 border border-adcc-warning/25 rounded-2xl text-adcc-warning font-mono text-[11px]">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-adcc-warning opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-adcc-warning" />
+      {/* Executive Command Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-white/10">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight">
+              Disaster Situation Command
+            </h1>
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+              <Radio size={14} className="animate-pulse text-cyan-400" />
+              LIVE TELEMETRY
+            </span>
+          </div>
+          <p className="text-sm sm:text-base text-slate-400 mt-1 font-normal">
+            Real-time situational awareness across all active global and domestic hazard perimeters.
+          </p>
+        </div>
+
+        {/* Global Action Controls */}
+        <div className="flex items-center gap-3">
+          <button
+            disabled={syncMutation.isPending || disastersLoading}
+            onClick={handleRefreshAll}
+            className="flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-sm rounded-xl transition-all duration-200 disabled:opacity-50 cursor-pointer shadow-lg"
+          >
+            <RefreshCw size={16} className={syncMutation.isPending ? 'animate-spin' : ''} />
+            <span>{syncMutation.isPending ? 'Syncing Feeds...' : 'Sync Live NWS / GDACS'}</span>
+          </button>
+
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm rounded-xl border border-white/10 transition-all duration-200 cursor-pointer"
+          >
+            <FileDown size={16} />
+            <span>Export Report</span>
+          </button>
+        </div>
+      </div>
+
+      {/* High-Level Situational Overview Metric Counters */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-md">
+          <div>
+            <span className="text-xs sm:text-sm uppercase font-bold text-slate-400 tracking-wider">
+              Total Active Disasters
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
+              {activeDisasters.length}
+            </div>
+            <span className="text-xs text-slate-500 font-medium">Monitored In Real-Time</span>
+          </div>
+          <div className="p-3 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <ShieldAlert size={28} />
+          </div>
+        </div>
+
+        <div className="bg-slate-900/80 border border-rose-500/30 rounded-2xl p-5 flex items-center justify-between shadow-md">
+          <div>
+            <span className="text-xs sm:text-sm uppercase font-bold text-rose-300 tracking-wider">
+              Critical Outbreaks
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-rose-400 mt-1">
+              {criticalDisasters.length}
+            </div>
+            <span className="text-xs text-rose-400/70 font-medium">Immediate Response Active</span>
+          </div>
+          <div className="p-3 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/30">
+            <Flame size={28} />
+          </div>
+        </div>
+
+        <div className="bg-slate-900/80 border border-amber-500/30 rounded-2xl p-5 flex items-center justify-between shadow-md">
+          <div>
+            <span className="text-xs sm:text-sm uppercase font-bold text-amber-300 tracking-wider">
+              Citizens At Risk
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
+              {totalAffectedPop ? totalAffectedPop.toLocaleString() : 'Estimating'}
+            </div>
+            <span className="text-xs text-amber-400/70 font-medium">In Evacuation Perimeters</span>
+          </div>
+          <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30">
+            <Users size={28} />
+          </div>
+        </div>
+
+        <div className="bg-slate-900/80 border border-emerald-500/30 rounded-2xl p-5 flex items-center justify-between shadow-md">
+          <div>
+            <span className="text-xs sm:text-sm uppercase font-bold text-emerald-300 tracking-wider">
+              Verified Events
+            </span>
+            <div className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
+              {verifiedReports.length}
+            </div>
+            <span className="text-xs text-emerald-400/70 font-medium">Satellite & Ground Confirmed</span>
+          </div>
+          <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            <ShieldCheck size={28} />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter & Live Search Toolbar */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-slate-900/90 border border-white/10 rounded-2xl p-4 shadow-lg">
+        {/* Country Focus Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
+          <span className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5 mr-1 shrink-0">
+            <Globe size={16} className="text-cyan-400" />
+            Region:
           </span>
-          <span className="font-bold tracking-wider uppercase">Demo Mode Active</span>
-          <span className="text-adcc-textMuted border-l border-adcc-border pl-3">Scenario generated for testing and training purposes.</span>
+          {[
+            { id: 'all', label: 'All Global Disasters' },
+            { id: 'USA', label: '🇺🇸 United States' },
+            { id: 'India', label: '🇮🇳 India' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setRegionFilter(tab.id as any)}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                regionFilter === tab.id
+                  ? 'bg-cyan-500 text-slate-950 shadow-md'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-white/5'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Right Controls: Severity Filter & Search Bar */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Severity Select */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Filter size={16} className="text-slate-400 hidden sm:block" />
+            <select
+              value={severityFilter}
+              onChange={e => setSeverityFilter(e.target.value)}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 border border-white/10 text-xs sm:text-sm font-bold text-slate-200 focus:outline-none focus:border-cyan-500"
+            >
+              <option value="all">All Severity Levels</option>
+              <option value="critical">🔴 Critical Severity</option>
+              <option value="high">🟠 High Severity</option>
+              <option value="medium">🟡 Medium Severity</option>
+              <option value="low">🟢 Low Severity</option>
+            </select>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative w-full sm:w-72">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search disaster name or city..."
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-800 border border-white/10 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Bento Grid */}
+      {disastersLoading ? (
+        <div className="py-24 flex flex-col items-center justify-center gap-4 text-slate-400">
+          <RefreshCw size={36} className="animate-spin text-cyan-400" />
+          <p className="text-base sm:text-lg font-bold">Synchronizing active disaster telemetry feeds...</p>
+        </div>
+      ) : filteredDisasters.length === 0 ? (
+        <div className="py-20 bg-slate-900/60 border border-dashed border-white/15 rounded-3xl flex flex-col items-center justify-center text-center p-6 gap-3">
+          <ShieldAlert size={44} className="text-slate-500" />
+          <h3 className="text-lg sm:text-xl font-bold text-white">No Disasters Match Selected Filters</h3>
+          <p className="text-sm sm:text-base text-slate-400 max-w-md">
+            Try switching region tabs or clearing search keywords to view all active emergency events.
+          </p>
+          <button
+            onClick={() => {
+              setRegionFilter('all');
+              setSeverityFilter('all');
+              setSearchQuery('');
+            }}
+            className="mt-2 px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm rounded-xl transition-colors cursor-pointer"
+          >
+            Reset Filters
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6 auto-rows-auto">
+          {filteredDisasters.map((disaster, idx) => (
+            <DisasterBentoCard
+              key={disaster.id}
+              disaster={disaster}
+              onClick={setSelectedDisaster}
+              index={idx}
+            />
+          ))}
         </div>
       )}
-      <SectionHeader 
-        title="Emergency Operations Command" 
-        description="Real-time live multi-agent pipeline monitoring and dispatch synchronization."
-        actions={
-          <div className="flex gap-2">
-            <button
-              disabled={isRefreshLoading}
-              onClick={handleRefreshAll}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-adcc-accentDim border border-adcc-accentBorder hover:bg-adcc-accent hover:text-adcc-bg text-[11px] font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-200 disabled:opacity-50"
-            >
-              <RefreshCw size={11} className={isRefreshLoading ? 'animate-spin' : ''} /> Sync
-            </button>
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-adcc-surface2 border border-adcc-border hover:border-adcc-accentBorder text-[11px] font-mono font-bold uppercase tracking-wider rounded-xl transition-all duration-200"
-            >
-              <FileDown size={11} /> Export
-            </button>
-          </div>
-        }
+
+      {/* Detailed Incident View Modal */}
+      <IncidentDetailModal 
+        disaster={selectedDisaster} 
+        onClose={() => setSelectedDisaster(null)} 
       />
-
-      {/* KPI Cards Grid */}
-      <motion.div 
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 relative z-10"
-      >
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Active Disasters"
-            value={activeDisasters.length}
-            icon={<ShieldAlert size={20} />}
-            trend={`${criticalDisasters.length} Critical`}
-            trendDirection={criticalDisasters.length > 0 ? "up" : "neutral"}
-            statusText={activeDisasters.length > 0 ? 'ACTIVE HAZARD' : 'NOMINAL'}
-            statusType={activeDisasters.length > 0 ? 'danger' : 'success'}
-            glow={activeDisasters.length > 0}
-            sparklineData={[3, 5, 2, 6, 4, activeDisasters.length]}
-          />
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Verified Reports"
-            value={verifiedReports.length}
-            icon={<ShieldCheck size={20} className="text-adcc-success" />}
-            trend={`${disasters.length - verifiedReports.length} Pending`}
-            trendDirection="neutral"
-            statusText="CONFIRMED EVENTS"
-            statusType="success"
-            sparklineData={[6, 8, 7, 9, 8, verifiedReports.length]}
-          />
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Severity Level"
-            value={currentSeverityLevel}
-            icon={<MapPin size={20} />}
-            trend="Max Outbreak"
-            trendDirection="neutral"
-            statusText="RESPONSE LEVEL"
-            statusType={currentSeverityLevel === 'Critical' ? 'danger' : currentSeverityLevel === 'High' ? 'warning' : 'success'}
-            glow={currentSeverityLevel === 'Critical'}
-            sparklineData={[1, 2, 3, 2, 4, currentSeverityLevel === 'Critical' ? 5 : currentSeverityLevel === 'High' ? 3 : 1]}
-          />
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Confidence Score"
-            value={`${avgConfidence}%`}
-            icon={<Activity size={20} />}
-            trend="Consensus Rating"
-            trendDirection="neutral"
-            statusText="DATA RELIABILITY"
-            statusType={avgConfidence >= 75 ? 'success' : avgConfidence >= 50 ? 'warning' : 'danger'}
-            sparklineData={[60, 68, 72, 70, 75, avgConfidence]}
-          />
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Resource Available"
-            value={`${resourcePercent}%`}
-            icon={<Boxes size={20} />}
-            trend={`${availableQty} Units Vacant`}
-            trendDirection={resourcePercent < 50 ? "down" : "neutral"}
-            statusText="LOGISTICS BUFFER"
-            statusType={resourcePercent >= 80 ? 'success' : resourcePercent >= 50 ? 'warning' : 'danger'}
-            sparklineData={[80, 85, 78, 70, 74, resourcePercent]}
-          />
-        </motion.div>
-
-        <motion.div variants={itemVariants}>
-          <StatCard
-            title="Critical Alerts"
-            value={alerts.filter(a => a.severity === 'Critical').length}
-            icon={<BellRing size={20} />}
-            trend="Live Sensors"
-            trendDirection="neutral"
-            statusText="ALARM STATUS"
-            statusType={alerts.some(a=>a.severity==='Critical') ? 'danger' : 'info'}
-            sparklineData={[1, 0, 2, 1, 3, alerts.filter(a => a.severity === 'Critical').length]}
-          />
-        </motion.div>
-      </motion.div>
-
-      {/* Diagnostics Health Status Widget */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.3 }}
-        className="relative z-10"
-      >
-        <SystemHealth 
-          dbConnected={health?.database === 'connected'} 
-          apiConnected={!!health}
-          onRefresh={handleRefreshAll}
-          isLoading={isRefreshLoading}
-        />
-      </motion.div>
-
-      {/* Visual Analytics / Main Panels Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative z-10">
-        
-        {/* Disaster Inundation Trend Chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.35 }}
-          className="xl:col-span-2 tactical-hud-panel rounded-2xl p-5 flex flex-col gap-4"
-        >
-          <div className="flex items-center justify-between pb-3 font-mono" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <h3 className="font-bold text-[11px] tracking-wider uppercase text-adcc-textPrimary">
-              Incident Frequency Ingestion (Active Models)
-            </h3>
-            <span className="text-[9px] text-adcc-accent uppercase font-mono">Live GIS Ingestion</span>
-          </div>
-          
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorCyclones" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorWildfires" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorFloods" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00E5FF" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#00E5FF" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
-                <XAxis dataKey="name" stroke="#9CA3AF" fontSize={10} tickLine={false} />
-                <YAxis stroke="#9CA3AF" fontSize={10} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111D35', border: '1px solid rgba(0,224,255,0.15)', borderRadius: '12px', color: '#EEF2FF', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' }}
-                  itemStyle={{ fontSize: '10px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', paddingTop: '10px' }} />
-                <Area type="monotone" dataKey="Cyclones" stroke="#F43F5E" fillOpacity={1} fill="url(#colorCyclones)" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="Wildfires" stroke="#F59E0B" fillOpacity={1} fill="url(#colorWildfires)" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="Floods"   stroke="#00E0FF" fillOpacity={1} fill="url(#colorFloods)"   strokeWidth={1.5} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* Live Alerts Panel (Auto-polling backend every 30s) */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.35 }}
-          className="h-full"
-        >
-          <LiveAlertsPanel limit={4} />
-        </motion.div>
-      </div>
-
-      {/* Second Row: Resource Utilization Chart */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pb-20 relative z-10">
-        
-        {/* Resource Allocation Chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25, duration: 0.35 }}
-          className="xl:col-span-2 tactical-hud-panel rounded-2xl p-5 flex flex-col gap-4"
-        >
-          <div className="flex items-center justify-between pb-3 font-mono" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <h3 className="font-bold text-[11px] tracking-wider uppercase text-adcc-textPrimary">
-              Resource Distribution Telemetry (Database Sync)
-            </h3>
-            <span className="text-[9px] text-adcc-accent uppercase font-mono">Logistics Depot Logs</span>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={resourceChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
-                <XAxis dataKey="name" stroke="#9CA3AF" fontSize={10} tickLine={false} />
-                <YAxis stroke="#9CA3AF" fontSize={10} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#111D35', border: '1px solid rgba(0,224,255,0.15)', borderRadius: '12px', color: '#EEF2FF', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' }}
-                  itemStyle={{ fontSize: '10px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', paddingTop: '10px' }} />
-                <Bar dataKey="Available" fill="#00E0FF" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Deployed"  fill="#F59E0B" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* Tactical Status Metrics */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.35 }}
-          className="tactical-hud-panel rounded-2xl p-5 flex flex-col gap-4"
-        >
-          <div className="flex items-center justify-between pb-3 font-mono" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <h3 className="font-bold text-[11px] tracking-wider uppercase text-adcc-textPrimary">
-              Logistics Registry Summary
-            </h3>
-            <span className="text-[9px] text-adcc-success uppercase font-mono">Active Sync</span>
-          </div>
-
-          <div className="flex-1 flex flex-col justify-center space-y-2.5 font-mono text-[11px]">
-            {[
-              { label: 'GIS Ingestion Server',  value: '99.98% UPTIME',    color: 'text-adcc-success' },
-              { label: 'Heartbeat Frequency',   value: '1.0s (POLLING)',   color: 'text-adcc-accent'  },
-              { label: 'Satellite Latency',     value: '480ms (SAT-NET)',  color: 'text-adcc-warning' },
-              { label: 'Primary Data Center',   value: 'MUMBAI / US-EAST', color: 'text-adcc-success' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="flex justify-between items-center bg-adcc-surface2/60 border border-adcc-border px-3 py-2.5 rounded-xl">
-                <span className="text-adcc-textMuted uppercase text-[10px]">{label}</span>
-                <span className={`font-bold text-[10px] ${color}`}>{value}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Real-World Operational Verification & Responder Telemetry Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.35, duration: 0.4 }}
-        className="mb-8"
-      >
-        <HumanVerificationTable />
-      </motion.div>
-
-      {/* Floating HUD Command Action Dock */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-adcc-surface/90 backdrop-blur-xl border border-adcc-accentBorder px-4 py-3 rounded-2xl z-[1000] flex flex-col md:flex-row items-center gap-4 shadow-elevated w-[90%] max-w-[660px]">
-        <div className="relative w-full md:w-44 flex items-center">
-          <input
-            type="text"
-            placeholder="Cmd + K Command Search..."
-            className="text-[10px] font-mono pl-7 pr-2.5 py-1.5 w-full rounded-lg bg-adcc-surface2 border border-adcc-border focus:border-adcc-accent"
-          />
-          <span className="absolute left-2 text-[10px] text-adcc-textMuted font-mono">⌘</span>
-        </div>
-        
-        <div className="flex flex-wrap gap-2 justify-center">
-          <button
-            onClick={() => alert("Simulating Twilio alert broadcast pipeline dispatch.")}
-            className="px-2.5 py-1.5 bg-adcc-danger/15 hover:bg-adcc-danger hover:text-white border border-adcc-danger/30 rounded-lg text-[9px] uppercase font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer"
-          >
-            Trigger Evac
-          </button>
-          <button
-            onClick={() => alert("Mobilizing tactical rescue resource batches.")}
-            className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500 hover:text-adcc-bg border border-amber-500/30 rounded-lg text-[9px] uppercase font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer"
-          >
-            Deploy Resource
-          </button>
-          <button
-            onClick={() => alert("Calculating alternative safe routing corridors.")}
-            className="px-2.5 py-1.5 bg-adcc-accentDim hover:bg-adcc-accent hover:text-adcc-bg border border-adcc-accentBorder rounded-lg text-[9px] uppercase font-mono font-bold tracking-wider transition-all duration-200 cursor-pointer"
-          >
-            Calculate Route
-          </button>
-        </div>
-      </div>
-
     </PageContainer>
   );
 };
+
 export default Dashboard;

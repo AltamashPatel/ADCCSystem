@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiService, { 
@@ -266,6 +267,23 @@ export const DisasterMap: React.FC = () => {
   const { data: shelters = [] } = useQuery({ queryKey: ['shelters'], queryFn: apiService.getShelters });
   const { data: resources = [] } = useQuery<BackendResource[]>({ queryKey: ['resources'], queryFn: apiService.getResources });
   const { data: allocations = [] } = useQuery<BackendAllocation[]>({ queryKey: ['allocations'], queryFn: () => apiService.getAllocations() });
+
+  const location = useLocation();
+  const targetedDisasterId = (location.state as any)?.selectedDisasterId;
+
+  // Jump to targeted disaster if navigated from Dashboard modal
+  useEffect(() => {
+    if (targetedDisasterId && disasters.length > 0) {
+      const targeted = disasters.find(d => d.id === targetedDisasterId);
+      if (targeted) {
+        setSelectedEntity({ type: 'disaster', data: targeted });
+        const map = mapInstanceRef.current;
+        if (map && targeted.latitude && targeted.longitude) {
+          map.flyTo([targeted.latitude, targeted.longitude], 7, { duration: 1.2 });
+        }
+      }
+    }
+  }, [targetedDisasterId, disasters]);
 
   // Region matcher helper
   const isMatchingRegion = (itemCountry?: string, lng?: number) => {
